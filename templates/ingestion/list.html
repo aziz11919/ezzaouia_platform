@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Fichiers — EZZAOUIA</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI',sans-serif; background:#0a1628; color:#e0ecff; }
+    .topbar { background:#111f35; border-bottom:1px solid #1e3a5f; padding:14px 28px; display:flex; justify-content:space-between; align-items:center; }
+    .topbar h1 { color:#4da6ff; font-size:18px; }
+    .topbar a { color:#4da6ff; text-decoration:none; font-size:13px; margin-left:16px; }
+    .content { padding:32px 28px; }
+    table { width:100%; border-collapse:collapse; background:#111f35; border-radius:10px; overflow:hidden; }
+    th { background:#0d1b2e; color:#6b8db5; font-size:11px; text-transform:uppercase; padding:12px 16px; text-align:left; }
+    td { padding:12px 16px; font-size:13px; border-bottom:1px solid #1a2d45; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:500; }
+    .badge-success    { background:#0d3320; color:#4daa7a; }
+    .badge-pending    { background:#1a2d3a; color:#6b8db5; }
+    .badge-processing { background:#1a3020; color:#f0a040; }
+    .badge-error      { background:#2d1515; color:#ff8080; }
+    .btn-upload { display:inline-block; padding:10px 20px; background:#1a6bb5; color:#fff; border-radius:8px; text-decoration:none; font-size:13px; margin-bottom:20px; }
+    .empty { color:#3d5a7a; font-size:14px; padding:32px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>EZZAOUIA — Fichiers importés</h1>
+    <div>
+      <a href="{% url 'ingestion:upload' %}">Nouvel import</a>
+      <a href="{% url 'dashboard:home' %}">Dashboard</a>
+      <a href="{% url 'accounts:logout' %}">Déconnexion</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <a href="{% url 'ingestion:upload' %}" class="btn-upload">+ Importer un fichier</a>
+
+    {% if files %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fichier</th>
+          <th>Type</th>
+          <th>Statut</th>
+          <th>Lignes extraites</th>
+          <th>Date import</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in files %}
+        <tr>
+          <td>{{ f.original_name }}</td>
+          <td>{{ f.get_file_type_display }}</td>
+          <td><span class="badge badge-{{ f.status }}">{{ f.get_status_display }}</span></td>
+          <td>{{ f.rows_extracted }}</td>
+          <td>{{ f.created_at|date:"d/m/Y H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Aucun fichier importé pour le moment.</div>
+    {% endif %}
+  </div>
+</body>
+</html>

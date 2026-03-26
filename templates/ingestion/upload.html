@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload — EZZAOUIA</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI',sans-serif; background:#0a1628; color:#e0ecff; }
+    .topbar { background:#111f35; border-bottom:1px solid #1e3a5f; padding:14px 28px; display:flex; justify-content:space-between; align-items:center; }
+    .topbar h1 { color:#4da6ff; font-size:18px; }
+    .topbar a  { color:#4da6ff; text-decoration:none; font-size:13px; margin-left:16px; }
+    .content { padding:32px 28px; max-width:600px; }
+    .card { background:#111f35; border:1px solid #1e3a5f; border-radius:10px; padding:28px; }
+    .card h2 { color:#4da6ff; font-size:16px; margin-bottom:20px; }
+    .drop-zone {
+      border: 2px dashed #1e3a5f;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      color: #6b8db5;
+      font-size: 14px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s;
+    }
+    .drop-zone:hover { border-color: #4da6ff; }
+    input[type="file"] { display:none; }
+    .file-label {
+      display:inline-block;
+      padding:10px 20px;
+      background:#1a6bb5;
+      color:#fff;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      margin-top:10px;
+    }
+    #file-name { margin-top:10px; font-size:13px; color:#4daa7a; }
+    .btn-submit {
+      width:100%;
+      padding:12px;
+      background:#1a6bb5;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      font-size:14px;
+      cursor:pointer;
+      margin-top:8px;
+    }
+    .btn-submit:hover { background:#2280d4; }
+    .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px; }
+    .alert-success { background:#0d3320; border:1px solid #1a6640; color:#4daa7a; }
+    .alert-error   { background:#2d1515; border:1px solid #5c2020; color:#ff8080; }
+    .formats { font-size:11px; color:#3d5a7a; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>EZZAOUIA — Upload fichier</h1>
+    <div>
+      <a href="{% url 'ingestion:list' %}">Mes fichiers</a>
+      <a href="{% url 'dashboard:home' %}">Dashboard</a>
+      <a href="{% url 'accounts:logout' %}">Déconnexion</a>
+    </div>
+  </div>
+
+  <div class="content">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="card">
+      <h2>Importer un rapport technique</h2>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+          Cliquez pour sélectionner un fichier
+          <br>
+          <label class="file-label">Parcourir</label>
+          <input type="file" id="fileInput" name="file"
+                 accept=".pdf,.docx,.xlsx"
+                 onchange="document.getElementById('file-name').textContent = this.files[0]?.name || ''">
+          <div id="file-name"></div>
+        </div>
+        <div class="formats">Formats acceptés : PDF, Word (.docx), Excel (.xlsx) — Max 50 MB</div>
+        <button type="submit" class="btn-submit">Lancer l'import</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

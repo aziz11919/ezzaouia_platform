@@ -1,0 +1,12 @@
+-r base.txt
+
+# Tests
+pytest==8.3.3
+pytest-django==4.9.0
+pytest-cov==6.0.0
+factory-boy==3.3.1         # Fixtures de test
+
+# Debug & qualité
+django-debug-toolbar==4.4.6
+black==24.10.0             # Formateur de code
+flake8==7.1.1

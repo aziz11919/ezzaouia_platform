@@ -1,0 +1,30 @@
+# Environnement virtuel
+venv/
+.venv/
+
+# Variables d'environnement (JAMAIS committer !)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Django
+staticfiles/
+media/
+logs/
+db.sqlite3
+
+# ChromaDB (vector store local)
+chroma_db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Windows
+Thumbs.db
+desktop.ini

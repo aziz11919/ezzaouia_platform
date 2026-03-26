@@ -1,0 +1,32 @@
+# ─── Django core ───────────────────────────────────────────────
+Django==4.2.16
+mssql-django==1.4          # ORM → Microsoft SQL Server
+pyodbc==5.1.0              # Driver ODBC natif Windows
+
+# ─── API REST (pour Power BI DirectQuery) ───────────────────────
+djangorestframework==3.15.2
+
+# ─── Tâches asynchrones ─────────────────────────────────────────
+celery==5.4.0
+redis==5.0.8               # Broker Celery (via Memurai sur Windows)
+django-celery-results==2.5.1
+
+# ─── Extraction de fichiers ──────────────────────────────────────
+PyPDF2==3.0.1
+python-docx==1.1.2
+pandas==2.2.3
+openpyxl==3.1.5            # Moteur Excel pour pandas
+
+# ─── Module IA / RAG ─────────────────────────────────────────────
+langchain==0.3.7
+langchain-community==0.3.7
+langchain-ollama==0.2.1    # Intégration Ollama officielle
+chromadb==0.5.18           # Vector store 100% local
+sentence-transformers==3.2.1  # Embeddings locaux (sans GPU requis)
+langchain-huggingface==0.1.2  # Nouvelle intégration HuggingFace
+huggingface-hub[hf_xet]       # Storage Xet (recommandé pour HF Hub)
+
+# ─── Sécurité & utilitaires ──────────────────────────────────────
+python-decouple==3.8       # Lecture du fichier .env
+django-guardian==2.4.0     # RBAC niveau objet
+Pillow==11.0.0             # Traitement images (optionnel)

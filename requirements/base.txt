@@ -21,10 +21,12 @@ openpyxl==3.1.5            # Moteur Excel pour pandas
 langchain==0.3.7
 langchain-community==0.3.7
 langchain-ollama==0.2.1    # Intégration Ollama officielle
+langchain-core==0.3.63     # Pinned: compatible avec langchain 0.3.7 + langchain-huggingface 0.1.2
+langsmith==0.1.147         # Pinned: compatible avec langchain 0.3.7 (< 0.2.0 requis)
 chromadb==0.5.18           # Vector store 100% local
 sentence-transformers==3.2.1  # Embeddings locaux (sans GPU requis)
-langchain-huggingface==0.1.2  # Nouvelle intégration HuggingFace
-huggingface-hub[hf_xet]       # Storage Xet (recommandé pour HF Hub)
+langchain-huggingface==0.1.2  # Pinned: 0.1.x compatible avec langchain-core 0.3.x
+huggingface-hub>=0.23.0       # HuggingFace Hub client
 
 # ─── Sécurité & utilitaires ──────────────────────────────────────
 python-decouple==3.8       # Lecture du fichier .env

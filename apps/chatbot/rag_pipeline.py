@@ -24,6 +24,7 @@ def get_llm():
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
             num_ctx=4096,
+            timeout=120,
         )
     return _llm
 
@@ -263,6 +264,12 @@ def get_sql_context(question):
 
 def ask(question, history=None, doc_id=None, filename=None):
     try:
+
+
+        q_lower = question.lower().strip()
+        salutations = ['bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'salam', 'merci']
+        if any(q_lower == s or q_lower.startswith(s + ' ') for s in salutations):
+            return "Bonjour ! Je suis votre assistant expert pour le champ EZZAOUIA. Posez-moi une question sur la production, les puits ou les rapports techniques."
         logger.info(f"Question : {question[:100]}")
 
         search_query = question
@@ -291,10 +298,10 @@ def ask(question, history=None, doc_id=None, filename=None):
         sql_context = get_sql_context(question)
 
         history_text = ""
-        if history:
-            history_text = "\n=== HISTORIQUE ===\n"
-            for h in history[-3:]:
-                history_text += f"Q: {h['question']}\nR: {h['answer'][:300]}...\n\n"
+        if history and len(history) > 0:
+            # Seulement le dernier échange pour éviter la confusion
+            last = history[-1]
+            history_text = f"\n=== ÉCHANGE PRÉCÉDENT ===\nQ: {last['question']}\nR: {last['answer'][:200]}...\n"
 
         available_docs = get_available_documents()
         docs_list = "\n".join(f"- {d}" for d in available_docs) if available_docs else "Aucun document indexé"

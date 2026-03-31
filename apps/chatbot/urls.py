@@ -9,4 +9,5 @@ urlpatterns = [
     path('new/',                      views.new_session,      name='new'),
     path('ask/',                      views.ask_view,         name='ask'),
     path('upload/',                   views.upload_chat_file, name='upload'),
+    path('session/<int:session_id>/delete/', views.delete_session, name='delete_session'),
 ]

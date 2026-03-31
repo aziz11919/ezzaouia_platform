@@ -1,7 +1,9 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <title>Upload — EZZAOUIA</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -51,15 +53,63 @@
     .alert-success { background:#0d3320; border:1px solid #1a6640; color:#4daa7a; }
     .alert-error   { background:#2d1515; border:1px solid #5c2020; color:#ff8080; }
     .formats { font-size:11px; color:#3d5a7a; margin-top:12px; }
+
+    /* ── Light mode overrides ── */
+    html[data-theme="light"] body { background:#F0F4F8; color:#1A2332; }
+    html[data-theme="light"] .topbar { background:#FFFFFF; border-bottom-color:rgba(184,148,60,0.25); }
+    html[data-theme="light"] .topbar h1 { color:#2B6CB0; }
+    html[data-theme="light"] .topbar a { color:#2B6CB0; }
+    html[data-theme="light"] .card { background:#FFFFFF; border-color:rgba(184,148,60,0.25); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    html[data-theme="light"] .card h2 { color:#2B6CB0; }
+    html[data-theme="light"] .drop-zone { border-color:rgba(184,148,60,0.3); color:#4A5568; background:#F8FAFC; }
+    html[data-theme="light"] .drop-zone:hover { border-color:#B8943C; }
+    html[data-theme="light"] .file-label { background:#2B6CB0; }
+    html[data-theme="light"] #file-name { color:#2E7D5E; }
+    html[data-theme="light"] .btn-submit { background:#2B6CB0; }
+    html[data-theme="light"] .btn-submit:hover { background:#2563EB; }
+    html[data-theme="light"] .alert-success { background:rgba(46,125,94,0.08); border-color:rgba(46,125,94,0.25); color:#2E7D5E; }
+    html[data-theme="light"] .alert-error   { background:rgba(192,57,43,0.08); border-color:rgba(192,57,43,0.25); color:#C0392B; }
+    html[data-theme="light"] .formats { color:#8A9BB5; }
+
+    /* ── Logo white background in dark mode ── */
+    html[data-theme="dark"] .logo-img { background:#fff; padding:3px; border-radius:5px; }
+
+    /* ── Theme toggle button ── */
+    .theme-toggle {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:34px; height:34px;
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:8px;
+      color:#6b8db5;
+      cursor:pointer;
+      transition:all 0.2s;
+      vertical-align:middle;
+      margin-left:12px;
+    }
+    .theme-toggle:hover { border-color:#C9A84C; color:#C9A84C; }
+    html[data-theme="light"] .theme-toggle { border-color:rgba(0,0,0,0.12); color:#4A5568; }
+    html[data-theme="light"] .theme-toggle:hover { border-color:#B8943C; color:#B8943C; }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <h1>EZZAOUIA — Upload fichier</h1>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="{% static 'img/logomaretap.png' %}" alt="MARETAP" class="logo-img" style="width:28px;height:28px;">
+      <h1>EZZAOUIA — Upload fichier</h1>
+    </div>
     <div>
       <a href="{% url 'ingestion:list' %}">Mes fichiers</a>
       <a href="{% url 'dashboard:home' %}">Dashboard</a>
       <a href="{% url 'accounts:logout' %}">Déconnexion</a>
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+        <svg class="icon-sun" width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <svg class="icon-moon" width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -90,5 +140,6 @@
       </form>
     </div>
   </div>
+<script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>

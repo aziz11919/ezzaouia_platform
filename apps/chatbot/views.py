@@ -149,3 +149,16 @@ def upload_chat_file(request):
     except Exception as e:
         logger.error(f"Erreur upload chat : {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def delete_session(request, session_id):
+    """Supprimer une session de conversation."""
+    try:
+        session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        session.delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        logger.error(f"Erreur delete_session : {e}")
+        return JsonResponse({'error': str(e)}, status=500)

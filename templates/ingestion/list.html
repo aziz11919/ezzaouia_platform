@@ -1,7 +1,9 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <title>Fichiers — EZZAOUIA</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -12,7 +14,7 @@
     .content { padding:32px 28px; }
     table { width:100%; border-collapse:collapse; background:#111f35; border-radius:10px; overflow:hidden; }
     th { background:#0d1b2e; color:#6b8db5; font-size:11px; text-transform:uppercase; padding:12px 16px; text-align:left; }
-    td { padding:12px 16px; font-size:13px; border-bottom:1px solid #1a2d45; }
+    td { padding:12px 16px; font-size:13px; border-bottom:1px solid #1a2d45; color:#e0ecff; }
     .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:500; }
     .badge-success    { background:#0d3320; color:#4daa7a; }
     .badge-pending    { background:#1a2d3a; color:#6b8db5; }
@@ -20,15 +22,62 @@
     .badge-error      { background:#2d1515; color:#ff8080; }
     .btn-upload { display:inline-block; padding:10px 20px; background:#1a6bb5; color:#fff; border-radius:8px; text-decoration:none; font-size:13px; margin-bottom:20px; }
     .empty { color:#3d5a7a; font-size:14px; padding:32px; text-align:center; }
+
+    /* ── Light mode overrides ── */
+    html[data-theme="light"] body { background:#F0F4F8; color:#1A2332; }
+    html[data-theme="light"] .topbar { background:#FFFFFF; border-bottom-color:rgba(184,148,60,0.25); }
+    html[data-theme="light"] .topbar h1 { color:#2B6CB0; }
+    html[data-theme="light"] .topbar a { color:#2B6CB0; }
+    html[data-theme="light"] table { background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    html[data-theme="light"] th { background:#E8EDF5; color:#4A5568; }
+    html[data-theme="light"] td { border-bottom-color:rgba(0,0,0,0.07); color:#1A2332; }
+    html[data-theme="light"] tr:hover td { background:rgba(0,0,0,0.02); }
+    html[data-theme="light"] .btn-upload { background:#2B6CB0; }
+    html[data-theme="light"] .empty { color:#8A9BB5; }
+    html[data-theme="light"] .badge-success    { background:rgba(46,125,94,0.1); color:#2E7D5E; }
+    html[data-theme="light"] .badge-pending    { background:rgba(74,85,104,0.1); color:#4A5568; }
+    html[data-theme="light"] .badge-processing { background:rgba(184,148,60,0.1); color:#B8943C; }
+    html[data-theme="light"] .badge-error      { background:rgba(192,57,43,0.1); color:#C0392B; }
+
+    /* ── Logo white background in dark mode ── */
+    html[data-theme="dark"] .logo-img { background:#fff; padding:3px; border-radius:5px; }
+
+    /* ── Theme toggle button ── */
+    .theme-toggle {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:34px; height:34px;
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:8px;
+      color:#6b8db5;
+      cursor:pointer;
+      transition:all 0.2s;
+      vertical-align:middle;
+      margin-left:12px;
+    }
+    .theme-toggle:hover { border-color:#C9A84C; color:#C9A84C; }
+    html[data-theme="light"] .theme-toggle { border-color:rgba(0,0,0,0.12); color:#4A5568; }
+    html[data-theme="light"] .theme-toggle:hover { border-color:#B8943C; color:#B8943C; }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <h1>EZZAOUIA — Fichiers importés</h1>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="{% static 'img/logomaretap.png' %}" alt="MARETAP" class="logo-img" style="width:28px;height:28px;">
+      <h1>EZZAOUIA — Fichiers importés</h1>
+    </div>
     <div>
       <a href="{% url 'ingestion:upload' %}">Nouvel import</a>
       <a href="{% url 'dashboard:home' %}">Dashboard</a>
       <a href="{% url 'accounts:logout' %}">Déconnexion</a>
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+        <svg class="icon-sun" width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <svg class="icon-moon" width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -62,5 +111,6 @@
     <div class="empty">Aucun fichier importé pour le moment.</div>
     {% endif %}
   </div>
+<script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>

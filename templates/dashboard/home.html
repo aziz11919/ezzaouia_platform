@@ -625,7 +625,7 @@
  
     <div class="nav-section">Modules</div>
  
-    <a href="{% url 'chatbot:chat' %}" class="nav-item">
+    <a href="{% url 'chatbot:new' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
       </svg>
@@ -774,7 +774,7 @@
     <div class="section-label">Modules</div>
     <div class="modules-grid">
  
-      <a href="{% url 'chatbot:chat' %}" class="module-card" style="--accent:#C9A84C;--icon-bg:#1A1400">
+      <a href="{% url 'chatbot:new' %}" class="module-card" style="--accent:#C9A84C;--icon-bg:#1A1400">
         <div class="module-icon-wrap">
           <svg width="22" height="22" fill="none" stroke="#C9A84C" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
@@ -782,7 +782,6 @@
         </div>
         <div class="module-title">Assistant IA</div>
         <div class="module-desc">Interrogez vos données en langage naturel. Analyses expertes basées sur votre DWH et vos documents techniques.</div>
-        <span class="module-tag">Llama3 · RAG · ChromaDB</span>
       </a>
  
       <a href="{% url 'ingestion:upload' %}" class="module-card" style="--accent:#4DAA7A;--icon-bg:#0A1E14">
@@ -793,7 +792,6 @@
         </div>
         <div class="module-title">Import fichiers</div>
         <div class="module-desc">Importez vos rapports PDF, Word et Excel. Extraction automatique et indexation pour le chatbot IA.</div>
-        <span class="module-tag">PDF · Word · Excel · Celery</span>
       </a>
  
       <a href="/api/kpis/summary/" target="_blank" class="module-card" style="--accent:#4D8FCC;--icon-bg:#0A1420">
@@ -804,7 +802,6 @@
         </div>
         <div class="module-title">API KPIs</div>
         <div class="module-desc">BOPD, BSW, GOR, production cumulée par puits. API REST consommée par Power BI en DirectQuery.</div>
-        <span class="module-tag">REST API · Power BI · SQL Server</span>
       </a>
  
     </div>

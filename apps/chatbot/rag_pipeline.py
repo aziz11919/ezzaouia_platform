@@ -262,14 +262,121 @@ def get_sql_context(question):
     return context
 
 
+def detect_chart_request(question):
+    chart_kw = ['évolution', 'evolution', 'historique', 'tendance', 'trend',
+                 'montrez', 'graphique', 'chart', 'courbe', 'progression',
+                 'mensuel', 'annuel', 'affiche', 'montre', 'visualis']
+    q = question.lower()
+    return any(kw in q for kw in chart_kw) and normalize_well_code(question) is not None
+
+
+def build_chart_data(question):
+    """Return Chart.js-compatible data dict for a well's monthly production trend."""
+    try:
+        from apps.kpis.calculators import get_monthly_trend
+        well = normalize_well_code(question)
+        if not well:
+            return None
+
+        year_match = re.search(r'\b(20\d{2})\b', question)
+        year = int(year_match.group(1)) if year_match else None
+
+        trend = get_monthly_trend(well_key=well.wellkey, year=year)
+        if not trend:
+            return None
+
+        labels   = [f"{t['month_name']} {t['year']}" for t in trend]
+        oil_data = [round(float(t['total_oil'] or 0), 1) for t in trend]
+        bsw_data = [round(float(t['avg_bsw'] or 0), 2) for t in trend]
+
+        return {
+            'well_code': well.wellcode,
+            'well_name': well.libelle or '',
+            'labels':    labels,
+            'datasets': [
+                {
+                    'label':           f'Production Huile (STB)',
+                    'data':            oil_data,
+                    'type':            'bar',
+                    'yAxisID':         'y',
+                    'backgroundColor': 'rgba(201,168,76,0.55)',
+                    'borderColor':     '#C9A84C',
+                    'borderWidth':     1,
+                },
+                {
+                    'label':           'BSW (%)',
+                    'data':            bsw_data,
+                    'type':            'line',
+                    'yAxisID':         'y1',
+                    'borderColor':     '#E05555',
+                    'backgroundColor': 'rgba(224,85,85,0.08)',
+                    'borderWidth':     2,
+                    'pointRadius':     3,
+                    'fill':            False,
+                },
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Erreur build_chart_data : {e}")
+        return None
+
+
+def generate_suggestions(question, well=None):
+    """Return 3 context-aware follow-up question strings."""
+    q = question.lower()
+
+    if well:
+        wc = well.wellcode
+        return [
+            f"Quelles interventions workover ont été réalisées sur le puits {wc} ?",
+            f"Comparez le BSW et GOR du puits {wc} avec la moyenne du champ",
+            f"Quel est le potentiel de récupération estimé pour le puits {wc} ?",
+        ]
+    if any(w in q for w in ['meilleur', 'top', 'classement', 'performer']):
+        return [
+            "Analysez le WCT et GOR des puits les moins performants",
+            "Quelles actions correctrices recommandez-vous pour les puits faibles ?",
+            "Comparez la production annuelle 2023 vs 2024 du champ",
+        ]
+    if any(w in q for w in ['bsw', 'gor', 'wct', 'water cut', 'réservoir', 'reservoir']):
+        return [
+            "Quels puits ont le BSW le plus élevé et quelle est la tendance ?",
+            "Analysez l'impact du water cut sur la production nette d'huile",
+            "Quelles recommandations G&G pour réduire le water cut ?",
+        ]
+    if any(w in q for w in ['liste', 'inventaire', 'tous les puits', 'combien']):
+        return [
+            "Quel est le taux d'utilisation des puits actifs ?",
+            "Analysez la production globale du champ EZZAOUIA",
+            "Quels puits fermés ont le meilleur potentiel de réactivation ?",
+        ]
+    if re.search(r'\b20\d{2}\b', q):
+        return [
+            "Comparez cette période avec l'année précédente",
+            "Quels événements opérationnels ont impacté la production cette année ?",
+            "Analysez la tendance mensuelle de la production sur cette période",
+        ]
+    return [
+        "Analysez la performance globale du champ EZZAOUIA",
+        "Quels sont les top 5 puits producteurs actuellement ?",
+        "Montrez l'évolution mensuelle de la production du champ",
+    ]
+
+
 def ask(question, history=None, doc_id=None, filename=None):
     try:
-
-
         q_lower = question.lower().strip()
         salutations = ['bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'salam', 'merci']
         if any(q_lower == s or q_lower.startswith(s + ' ') for s in salutations):
-            return "Bonjour ! Je suis votre assistant expert pour le champ EZZAOUIA. Posez-moi une question sur la production, les puits ou les rapports techniques."
+            return {
+                'answer': "Bonjour ! Je suis votre assistant expert pour le champ EZZAOUIA. Posez-moi une question sur la production, les puits ou les rapports techniques.",
+                'chart_data':  None,
+                'suggestions': [
+                    "Analyse la performance du champ EZZAOUIA",
+                    "Quels sont les top 5 puits producteurs ?",
+                    "Liste tous les puits actifs avec leur statut",
+                ],
+            }
         logger.info(f"Question : {question[:100]}")
 
         search_query = question
@@ -365,9 +472,23 @@ ANALYSE EXPERTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         response = get_llm().invoke(prompt)
-        logger.info(f"Réponse : {len(response)} chars")
-        return response.strip()
+        answer   = response.strip()
+        logger.info(f"Réponse : {len(answer)} chars")
+
+        well       = normalize_well_code(question)
+        chart_data = build_chart_data(question) if detect_chart_request(question) else None
+        suggestions = generate_suggestions(question, well=well)
+
+        return {
+            'answer':      answer,
+            'chart_data':  chart_data,
+            'suggestions': suggestions,
+        }
 
     except Exception as e:
         logger.error(f"Erreur ask() : {e}")
-        return f"Erreur technique : {str(e)}"
+        return {
+            'answer':      f"Erreur technique : {str(e)}",
+            'chart_data':  None,
+            'suggestions': [],
+        }

@@ -11,6 +11,9 @@ from .rag_pipeline import ask, index_document
 
 logger = logging.getLogger('apps')
 
+# In-memory set of user IDs that requested cancellation
+_stop_requests: set = set()
+
 
 @login_required
 def chatbot_view(request, session_id=None):
@@ -21,7 +24,7 @@ def chatbot_view(request, session_id=None):
     if session_id:
         session = get_object_or_404(ChatSession, id=session_id, user=request.user)
     else:
-        session = sessions.first()
+        session = None  # always show fresh welcome screen when no session_id
 
     messages = session.messages.order_by('created_at') if session else []
 
@@ -70,9 +73,21 @@ def ask_view(request):
             for m in session.messages.order_by('created_at')
         ]
 
-        start    = time.time()
-        answer   = ask(question, history=history, doc_id=doc_id, filename=filename)
+        # Clear any stale stop flag before starting
+        _stop_requests.discard(request.user.id)
+
+        start  = time.time()
+        result = ask(question, history=history, doc_id=doc_id, filename=filename)
         duration = round(time.time() - start, 2)
+
+        # If user clicked Stop while the LLM was running, discard the result
+        if request.user.id in _stop_requests:
+            _stop_requests.discard(request.user.id)
+            return JsonResponse({'stopped': True})
+
+        answer     = result['answer']
+        chart_data = result.get('chart_data')
+        suggestions = result.get('suggestions', [])
 
         ChatMessage.objects.create(
             session=session,
@@ -86,9 +101,11 @@ def ask_view(request):
             session.save()
 
         return JsonResponse({
-            'answer':     answer,
-            'duration':   duration,
-            'session_id': session.id,
+            'answer':      answer,
+            'duration':    duration,
+            'session_id':  session.id,
+            'chart_data':  chart_data,
+            'suggestions': suggestions,
         })
 
     except Exception as e:
@@ -161,4 +178,32 @@ def delete_session(request, session_id):
         return JsonResponse({'success': True})
     except Exception as e:
         logger.error(f"Erreur delete_session : {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def stop_generation(request):
+    """Signal that the current LLM generation should be discarded."""
+    _stop_requests.add(request.user.id)
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def rename_session(request, session_id):
+    """Renommer une session de conversation."""
+    try:
+        data = json.loads(request.body)
+        title = data.get('title', '').strip()
+        if not title:
+            return JsonResponse({'error': 'Titre vide.'}, status=400)
+        if len(title) > 200:
+            return JsonResponse({'error': 'Titre trop long.'}, status=400)
+        session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        session.title = title
+        session.save(update_fields=['title'])
+        return JsonResponse({'success': True, 'title': title})
+    except Exception as e:
+        logger.error(f"Erreur rename_session : {e}")
         return JsonResponse({'error': str(e)}, status=500)

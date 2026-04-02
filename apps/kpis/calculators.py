@@ -82,30 +82,49 @@ def get_well_kpis(well_key=None, year=None, month=None):
     return list(result)
 
 
-def get_monthly_trend(year=None, well_key=None):
+_MOIS_FR = {
+    1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+    5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+    9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre',
+}
+
+
+def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
+                      date_start=None, date_end=None):
     """
     Tendance mensuelle de production — pour graphiques.
+    Priorité : date_start/date_end > year_start/year_end > year.
+    GROUP BY year+month numériques uniquement (évite les doublons si monthname
+    est inconsistant dans DimDate).
     """
     qs = FactDailyProduction.objects.select_related('datekey')
 
-    if year:
+    if date_start and date_end:
+        qs = qs.filter(datekey__fulldate__gte=date_start, datekey__fulldate__lte=date_end)
+    elif year_start and year_end:
+        qs = qs.filter(datekey__year__gte=year_start, datekey__year__lte=year_end)
+    elif year:
         qs = qs.filter(datekey__year=year)
     if well_key:
         qs = qs.filter(wellkey=well_key)
 
-    result = qs.values(
-        month=F('datekey__month'),
-        year=F('datekey__year'),
-        month_name=F('datekey__monthname'),
-    ).annotate(
-        total_oil   = Sum('dailyoilprodstbd'),
-        total_water = Sum('dailywaterprodblsd'),
-        total_gas   = Sum('dailygasprodmscf'),
-        avg_bsw     = Avg('bsw'),
-        avg_gor     = Avg('gorscfstb'),
-    ).order_by('year', 'month')
+    rows = list(
+        qs.values(
+            month=F('datekey__month'),
+            year=F('datekey__year'),
+        ).annotate(
+            total_oil   = Sum('dailyoilprodstbd'),
+            total_water = Sum('dailywaterprodblsd'),
+            total_gas   = Sum('dailygasprodmscf'),
+            avg_bsw     = Avg('bsw'),
+            avg_gor     = Avg('gorscfstb'),
+        ).order_by('year', 'month')
+    )
 
-    return list(result)
+    for r in rows:
+        r['month_name'] = _MOIS_FR.get(r['month'], str(r['month']))
+
+    return rows
 
 
 def get_well_test_kpis(well_key=None, year=None):

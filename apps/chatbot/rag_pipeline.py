@@ -18,7 +18,7 @@ _global_vectorstore = None
 
 def get_llm():
     global _llm
-    if _llm is None:
+    if _llm is None: #garantit que l'objet LLM n'est créé qu'une seule fois pendant toute la durée de vie du serveur Django.
         _llm = OllamaLLM(
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
@@ -59,7 +59,7 @@ def get_vectorstore_for_doc(doc_id):
     return _vectorstores[doc_id]
 
 
-def get_global_vectorstore():
+def get_global_vectorstore():   
     global _global_vectorstore
     if _global_vectorstore is None:
         _global_vectorstore = Chroma(
@@ -198,31 +198,49 @@ def get_sql_context(question):
                         f"Total: {w['total_oil']:>12,.0f} STB — "
                         f"BSW: {w['avg_bsw']:>5.1f}%\n")
 
+    years_found = re.findall(r'\b(20\d{2})\b', q)
     year_match = re.search(r'\b(20\d{2})\b', q)
-    if year_match:
-        year    = int(year_match.group(1))
-        summary = get_field_production_summary(year=year)
-        trend   = get_monthly_trend(year=year)
-        if summary and summary.get('total_oil_stbd', 0) > 0:
-            context += f"\n=== PRODUCTION {year} ===\n"
-            context += f"- BOPD moyen : {summary['avg_bopd']:,.1f}\n"
-            context += f"- Huile      : {summary['total_oil_stbd']:,.0f} STB\n"
-            context += f"- BSW        : {summary['avg_bsw']:.2f}%\n"
-            context += f"- GOR        : {summary['avg_gor']:,.0f}\n"
+    if years_found:
+        if len(years_found) >= 2:
+            y_start, y_end = int(min(years_found)), int(max(years_found))
+            trend = get_monthly_trend(year_start=y_start, year_end=y_end)
+            context += f"\n=== PRODUCTION {y_start}–{y_end} (mensuel) ===\n"
             if trend:
-                context += f"\nMensuel {year} :\n"
                 for t in trend:
-                    context += (f"  {str(t['month_name']):12} : "
+                    context += (f"  {str(t['month_name']):12} {t['year']} : "
                                 f"{t['total_oil']:>10,.0f} STB — "
                                 f"BSW {t['avg_bsw']:.1f}%\n")
+            else:
+                context += f"[SQL] Pas de données pour {y_start}–{y_end}.\n"
         else:
-            context += f"\n[SQL] Pas de données pour {year}.\n"
+            year    = int(years_found[0])
+            summary = get_field_production_summary(year=year)
+            trend   = get_monthly_trend(year=year)
+            if summary and summary.get('total_oil_stbd', 0) > 0:
+                context += f"\n=== PRODUCTION {year} ===\n"
+                context += f"- BOPD moyen : {summary['avg_bopd']:,.1f}\n"
+                context += f"- Huile      : {summary['total_oil_stbd']:,.0f} STB\n"
+                context += f"- BSW        : {summary['avg_bsw']:.2f}%\n"
+                context += f"- GOR        : {summary['avg_gor']:,.0f}\n"
+                if trend:
+                    context += f"\nMensuel {year} :\n"
+                    for t in trend:
+                        context += (f"  {str(t['month_name']):12} : "
+                                    f"{t['total_oil']:>10,.0f} STB — "
+                                    f"BSW {t['avg_bsw']:.1f}%\n")
+            else:
+                context += f"\n[SQL] Pas de données pour {year}.\n"
 
     well = normalize_well_code(question)
     if well:
-        year  = int(year_match.group(1)) if year_match else None
-        kpis  = get_well_kpis(well_key=well.wellkey, year=year)
-        trend = get_monthly_trend(well_key=well.wellkey, year=year)
+        if len(years_found) >= 2:
+            y_start, y_end = int(min(years_found)), int(max(years_found))
+            kpis  = get_well_kpis(well_key=well.wellkey, year=None)
+            trend = get_monthly_trend(well_key=well.wellkey, year_start=y_start, year_end=y_end)
+        else:
+            year  = int(years_found[0]) if years_found else None
+            kpis  = get_well_kpis(well_key=well.wellkey, year=year)
+            trend = get_monthly_trend(well_key=well.wellkey, year=year)
         context += f"\n=== PUITS {well.wellcode} — {well.libelle} ===\n"
         context += f"- Statut : {'Fermé' if well.closed == 'Y' else 'Actif'}\n"
         context += f"- Layer  : {well.layer}\n"
@@ -262,6 +280,60 @@ def get_sql_context(question):
     return context
 
 
+_MONTHS_FR = {
+    'janvier': 1, 'février': 2, 'fevrier': 2, 'mars': 3, 'avril': 4,
+    'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8, 'aout': 8,
+    'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12, 'decembre': 12,
+}
+
+
+def parse_date_range(question):
+    """
+    Extrait (date_start, date_end) depuis une question en français.
+    Exemples :
+      "de janvier 2017 à décembre 2020"  → (2017-01-01, 2020-12-31)
+      "de mars 2018 à août 2019"         → (2018-03-01, 2019-08-31)
+      "2017 à 2020"                      → (2017-01-01, 2020-12-31)
+      "2019"                             → (2019-01-01, 2019-12-31)
+    """
+    from datetime import date
+    import calendar as _cal
+
+    q = question.lower()
+    month_pat = '|'.join(_MONTHS_FR.keys())
+    my_matches = re.findall(rf'({month_pat})\s+(20\d{{2}})', q)
+    year_matches = re.findall(r'\b(20\d{2})\b', q)
+
+    if len(my_matches) >= 2:
+        m1, y1 = my_matches[0]
+        m2, y2 = my_matches[-1]
+        d_start = date(int(y1), _MONTHS_FR[m1], 1)
+        ey, em = int(y2), _MONTHS_FR[m2]
+        d_end = date(ey, em, _cal.monthrange(ey, em)[1])
+        return d_start, d_end
+
+    if len(my_matches) == 1:
+        m1, y1 = my_matches[0]
+        start_m, start_y = _MONTHS_FR[m1], int(y1)
+        years = [int(y) for y in year_matches]
+        other = [y for y in years if y != start_y]
+        if other:
+            end_y = max(other)
+            return date(start_y, start_m, 1), date(end_y, 12, 31)
+        return (date(start_y, start_m, 1),
+                date(start_y, start_m, _cal.monthrange(start_y, start_m)[1]))
+
+    if len(year_matches) >= 2:
+        years = sorted(int(y) for y in year_matches)
+        return date(years[0], 1, 1), date(years[-1], 12, 31)
+
+    if len(year_matches) == 1:
+        y = int(year_matches[0])
+        return date(y, 1, 1), date(y, 12, 31)
+
+    return None, None
+
+
 def detect_chart_request(question):
     chart_kw = ['évolution', 'evolution', 'historique', 'tendance', 'trend',
                  'montrez', 'graphique', 'chart', 'courbe', 'progression',
@@ -278,10 +350,8 @@ def build_chart_data(question):
         if not well:
             return None
 
-        year_match = re.search(r'\b(20\d{2})\b', question)
-        year = int(year_match.group(1)) if year_match else None
-
-        trend = get_monthly_trend(well_key=well.wellkey, year=year)
+        date_start, date_end = parse_date_range(question)
+        trend = get_monthly_trend(well_key=well.wellkey, date_start=date_start, date_end=date_end)
         if not trend:
             return None
 
@@ -441,8 +511,6 @@ FORMAT DE RÉPONSE
 ▌ RÉSERVOIR (WCT/GOR/pression) :
   📈 Tendance | 🔴 Risques | 💡 Recommandations G&G
 
-▌ BUDGÉTAIRE (CAPEX/OPEX/AFE) :
-  💰 Écarts | 🔧 Leviers OPEX | 📈 Impact ROI
 
 ▌ HISTORIQUE (année/événement) :
   📅 Chronologie | 📊 Données période | 💥 Impact production

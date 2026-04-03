@@ -149,6 +149,11 @@ CHROMA_PERSIST_DIR = config('CHROMA_PERSIST_DIR', default=str(BASE_DIR / 'chroma
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS   = ['.pdf', '.docx', '.xlsx', '.xls']
+# Dossier OneDrive partagé MARETAP — copie automatique de chaque upload
+ONEDRIVE_SYNC_DIR = config(
+    'ONEDRIVE_SYNC_DIR',
+    default=r'C:\Users\Mega-PC\OneDrive - MARETAP SA\Attachments\aaaaa',
+)
 
 # ── Logging ───────────────────────────────────────────────────────
 LOGGING = {

@@ -97,6 +97,7 @@ def index_document(text, metadata=None, doc_id=None):
             get_vectorstore_for_doc(doc_id).add_documents(docs)
 
         get_global_vectorstore().add_documents(docs)
+        
         logger.info(f"Indexé {len(docs)} chunks")
         return len(docs)
 
@@ -120,13 +121,13 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6):
         if filename:
             results = vs.similarity_search(
                 query, k=k,
-                filter={"filename": {"$eq": filename}}
+                filter={"filename": {"$eq": filename}} #Cherche seulement dans CE fichier
             )
             if results:
                 return results
 
         return vs.max_marginal_relevance_search(
-            query, k=k, fetch_k=k*4, lambda_mult=0.5
+            query, k=k, fetch_k=k*4, lambda_mult=0.5  #k*4 pour explore plus  large , trouver des infos meme loin  dans la base
         )
 
     except Exception as e:
@@ -134,14 +135,14 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6):
         return []
 
 
-def get_available_documents():
+def get_available_documents():  #la liste des fichiers qui existent dans ton vector store dans la  base (Chroma)
     try:
-        collection = get_global_vectorstore()._collection
-        results    = collection.get(include=['metadatas'])
-        filenames  = set()
+        collection = get_global_vectorstore()._collection #_collection = base de données Chroma (bas niveau)
+        results    = collection.get(include=['metadatas'])  #donne-moi uniquement les metadata
+        filenames  = set()   #éviter les doublons
         for meta in results.get('metadatas', []):
             if meta and meta.get('filename'):
-                filenames.add(meta['filename'])
+                filenames.add(meta['filename'])  #Ajoute le nom du fichier sans  duplication
         return list(filenames)
     except Exception as e:
         logger.error(f"Erreur liste docs : {e}")
@@ -154,7 +155,7 @@ def normalize_well_code(text):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             raw  = match.group(1).upper().replace(' ', '').replace('#', '')
-            well = DimWell.objects.filter(wellcode__icontains=raw.replace('-', '')).first()
+            well = DimWell.objects.filter(wellcode__icontains=raw.replace('-', '')).first()  #icontains = recherche flexible
             if not well:
                 well = DimWell.objects.filter(wellcode__icontains=raw).first()
             if well:
@@ -483,6 +484,15 @@ def ask(question, history=None, doc_id=None, filename=None):
         available_docs = get_available_documents()
         docs_list = "\n".join(f"- {d}" for d in available_docs) if available_docs else "Aucun document indexé"
 
+        # Extract explicit "top N" number from the question
+        top_n_match = re.search(r'\btop\s+(\d+)\b', question, re.IGNORECASE)
+        top_n = int(top_n_match.group(1)) if top_n_match else None
+        top_n_rule = (
+            f"\n6. La question demande exactement TOP {top_n} — tu DOIS lister "
+            f"exactement {top_n} éléments, ni plus ni moins, dans TOUTES les sections de ta réponse."
+            if top_n else ""
+        )
+
         prompt = f"""Tu es un Expert Senior en Ingénierie de Production Pétrolière et Asset Management pour le champ EZZAOUIA (MARETAP, Tunisie – CPF Zarzis).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -492,7 +502,7 @@ RÈGLES ABSOLUES
 2. Utilise UNIQUEMENT les données ci-dessous. Zéro hallucination.
 3. Info manquante → "Information non disponible dans les données actuelles."
 4. Ne jamais mélanger les informations de sources différentes.
-5. Hors sujet EZZAOUIA → "Hors périmètre."
+5. Hors sujet EZZAOUIA → "Hors périmètre."{top_n_rule}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DOCUMENTS DISPONIBLES
@@ -539,7 +549,7 @@ QUESTION
 ANALYSE EXPERTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
-        response = get_llm().invoke(prompt)
+        response = get_llm().invoke(prompt) # invoke ()envoie le prompt (question + contexte SQL) au modèle pour générer une réponse
         answer   = response.strip()
         logger.info(f"Réponse : {len(answer)} chars")
 

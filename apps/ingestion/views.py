@@ -1,10 +1,14 @@
 import os
+import shutil
+import logging
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import UploadedFile
 from .tasks import process_uploaded_file
 from django.conf import settings
+
+logger = logging.getLogger('apps')
 
 
 @login_required
@@ -24,6 +28,24 @@ def upload_view(request):
             uploaded_by=request.user,
             status='pending',
         )
+
+        # Copie automatique vers le dossier OneDrive partagé MARETAP
+        onedrive_dir = getattr(settings, 'ONEDRIVE_SYNC_DIR', None)
+        if onedrive_dir:
+            try:
+                os.makedirs(onedrive_dir, exist_ok=True)
+                dest = os.path.join(onedrive_dir, f.name)
+                # Éviter l'écrasement silencieux : ajouter un suffixe si le fichier existe déjà
+                if os.path.exists(dest):
+                    base, ext = os.path.splitext(f.name)
+                    counter = 1
+                    while os.path.exists(dest):
+                        dest = os.path.join(onedrive_dir, f"{base}_{counter}{ext}")
+                        counter += 1
+                shutil.copy2(uploaded.file.path, dest)
+                logger.info(f"Copie OneDrive OK : {dest}")
+            except Exception as e:
+                logger.error(f"Erreur copie OneDrive : {e}")
 
         # Lancer le traitement en arrière-plan (Celery)
         process_uploaded_file.delay(uploaded.id)

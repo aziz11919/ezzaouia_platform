@@ -32,9 +32,12 @@ LOCAL_APPS = [
     'apps.accounts',
     'apps.warehouse',
     'apps.ingestion',
+    'apps.bibliotheque',
+    'apps.reports',
     'apps.kpis',
     'apps.chatbot',
     'apps.dashboard',
+    'apps.audit',
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -46,6 +49,8 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'apps.accounts.middleware.SessionTimeoutMiddleware',
+    'apps.audit.middleware.AuditMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -80,9 +85,11 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'OPTIONS': {
             'driver': 'ODBC Driver 17 for SQL Server',
-            'extra_params': (
-                'Trusted_Connection=' + config('DB_TRUSTED_CONNECTION', default='no')
-            ),
+            'extra_params': ';'.join([
+                'Trusted_Connection=' + config('DB_TRUSTED_CONNECTION', default='no'),
+                'Encrypt=' + config('DB_ENCRYPT', default='no'),
+                'TrustServerCertificate=' + config('DB_TRUST_SERVER_CERTIFICATE', default='yes'),
+            ]),
         },
     }
 }
@@ -96,6 +103,13 @@ AUTHENTICATION_BACKENDS = [
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# Session timeout: 30 minutes d'inactivite
+SESSION_COOKIE_AGE = 1800
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_HTTPONLY = True
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

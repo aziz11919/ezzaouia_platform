@@ -8,7 +8,10 @@ urlpatterns = [
     path('accounts/',   include('apps.accounts.urls', namespace='accounts')),
     path('dashboard/',  include('apps.dashboard.urls', namespace='dashboard')),
     path('ingestion/',  include('apps.ingestion.urls')),
+    path('bibliotheque/', include('apps.bibliotheque.urls', namespace='bibliotheque')),
+    path('reports/', include('apps.reports.urls', namespace='reports')),
     path('chatbot/',    include('apps.chatbot.urls')),
+    path('audit/',      include('apps.audit.urls', namespace='audit')),
     path('api/kpis/',   include('apps.kpis.urls')),
     path('api/warehouse/', include('apps.warehouse.urls')),
 ]

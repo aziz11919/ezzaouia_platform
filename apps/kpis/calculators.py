@@ -152,7 +152,7 @@ def get_well_test_kpis(well_key=None, year=None):
     return list(result)
 
 
-def get_top_producers(limit=5, year=None):
+def get_top_producers(limit=5, year=None, month=None):
     """
     Top N puits producteurs par huile.
     """
@@ -160,6 +160,8 @@ def get_top_producers(limit=5, year=None):
 
     if year:
         qs = qs.filter(datekey__year=year)
+    if month:
+        qs = qs.filter(datekey__month=month)
 
     return list(
         qs.values(

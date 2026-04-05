@@ -7,6 +7,7 @@ from django.contrib import messages
 from .models import UploadedFile
 from .tasks import process_uploaded_file
 from django.conf import settings
+from apps.audit.models import AuditLog
 
 logger = logging.getLogger('apps')
 
@@ -27,6 +28,16 @@ def upload_view(request):
             file_type=ext,
             uploaded_by=request.user,
             status='pending',
+        )
+
+        AuditLog.log(
+            action=AuditLog.Action.UPLOAD_FILE,
+            user=request.user,
+            request=request,
+            details={
+                'filename': f.name,
+                'status': uploaded.status,
+            },
         )
 
         # Copie automatique vers le dossier OneDrive partagé MARETAP

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://127.0.0.1:11434/api/tags)",
+      "Bash(curl:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - total_duration:', d.get\\('total_duration','?'\\), 'eval_count:', d.get\\('eval_count','?'\\)\\)\")",
+      "Bash(powershell:*)",
+      "Bash(nvidia-smi)",
+      "Bash(git checkout:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

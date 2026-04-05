@@ -1,0 +1,87 @@
+from datetime import datetime
+
+from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db import OperationalError, ProgrammingError
+from django.shortcuts import redirect, render
+
+from .models import AuditLog
+
+
+def _parse_iso_date(raw_value):
+    if not raw_value:
+        return None
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@login_required
+def audit_log_list(request):
+    if getattr(request.user, "role", None) not in {"admin", "direction"}:
+        messages.error(request, "Acces non autorise.")
+        return redirect("dashboard:home")
+
+    user_filter = request.GET.get("user", "").strip()
+    action_filter = request.GET.get("action", "").strip()
+    start_date_raw = request.GET.get("start_date", "").strip()
+    end_date_raw = request.GET.get("end_date", "").strip()
+
+    try:
+        logs = AuditLog.objects.select_related("user").all()
+
+        if user_filter.isdigit():
+            logs = logs.filter(user_id=int(user_filter))
+
+        allowed_actions = {action for action, _ in AuditLog.Action.choices}
+        if action_filter in allowed_actions:
+            logs = logs.filter(action=action_filter)
+
+        start_date = _parse_iso_date(start_date_raw)
+        if start_date_raw and start_date:
+            logs = logs.filter(created_at__date__gte=start_date)
+        elif start_date_raw:
+            messages.warning(request, "Date de debut invalide.")
+
+        end_date = _parse_iso_date(end_date_raw)
+        if end_date_raw and end_date:
+            logs = logs.filter(created_at__date__lte=end_date)
+        elif end_date_raw:
+            messages.warning(request, "Date de fin invalide.")
+
+        paginator = Paginator(logs, 20)
+        page_obj = paginator.get_page(request.GET.get("page"))
+
+        users_with_logs = get_user_model().objects.filter(
+            id__in=AuditLog.objects.exclude(user__isnull=True)
+            .values_list("user_id", flat=True)
+            .distinct()
+        ).order_by("username")
+    except (ProgrammingError, OperationalError):
+        messages.error(
+            request,
+            "Table audit absente. Lancez 'python manage.py migrate audit' puis rechargez la page.",
+        )
+        users_with_logs = get_user_model().objects.none()
+        page_obj = Paginator([], 20).get_page(1)
+
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
+    return render(
+        request,
+        "audit/log.html",
+        {
+            "page_obj": page_obj,
+            "users": users_with_logs,
+            "actions": AuditLog.Action.choices,
+            "user_filter": user_filter,
+            "action_filter": action_filter,
+            "start_date": start_date_raw,
+            "end_date": end_date_raw,
+            "query_string": query_params.urlencode(),
+        },
+    )

@@ -392,76 +392,197 @@ def build_chart_data(question):
         return None
 
 
-def generate_suggestions(question, well=None):
+def detect_language(text):
+    if not text:
+        return 'fr'
+
+    if re.search(r'[\u0600-\u06FF]', text):
+        return 'ar'
+
+    lowered = text.lower()
+    fr_words = ['analyse', 'puits', 'production', 'quel', 'quels', 'comment', 'donne', 'liste', 'montre']
+    en_words = ['analyze', 'well', 'production', 'what', 'how', 'show', 'give', 'list']
+
+    fr_score = sum(1 for w in fr_words if re.search(rf'\b{re.escape(w)}\b', lowered))
+    en_score = sum(1 for w in en_words if re.search(rf'\b{re.escape(w)}\b', lowered))
+
+    if en_score > fr_score and en_score > 0:
+        return 'en'
+    if fr_score > 0:
+        return 'fr'
+    return 'fr'
+
+
+def generate_suggestions(question, well=None, lang='fr'):
     """Return 3 context-aware follow-up question strings."""
     q = question.lower()
+    lang = lang if lang in {'fr', 'en', 'ar'} else 'fr'
+
+    def choose(fr_text, en_text, ar_text):
+        if lang == 'en':
+            return en_text
+        if lang == 'ar':
+            return ar_text
+        return fr_text
 
     if well:
         wc = well.wellcode
         return [
-            f"Quelles interventions workover ont été réalisées sur le puits {wc} ?",
-            f"Comparez le BSW et GOR du puits {wc} avec la moyenne du champ",
-            f"Quel est le potentiel de récupération estimé pour le puits {wc} ?",
+            choose(
+                f"Quelles interventions workover ont ete realisees sur le puits {wc} ?",
+                f"What workover interventions were performed on well {wc}?",
+                f"ما هي تدخلات الـ workover التي تم تنفيذها على البئر {wc}؟",
+            ),
+            choose(
+                f"Comparez le BSW et GOR du puits {wc} avec la moyenne du champ",
+                f"Compare the BSW and GOR of well {wc} with the field average.",
+                f"قارن BSW و GOR للبئر {wc} مع متوسط الحقل.",
+            ),
+            choose(
+                f"Quel est le potentiel de recuperation estime pour le puits {wc} ?",
+                f"What is the estimated recovery potential for well {wc}?",
+                f"ما هو تقدير إمكانية الاسترجاع للبئر {wc}؟",
+            ),
         ]
+
     if any(w in q for w in ['meilleur', 'top', 'classement', 'performer']):
         return [
-            "Analysez le WCT et GOR des puits les moins performants",
-            "Quelles actions correctrices recommandez-vous pour les puits faibles ?",
-            "Comparez la production annuelle 2023 vs 2024 du champ",
+            choose(
+                "Analysez le WCT et GOR des puits les moins performants",
+                "Analyze WCT and GOR for the lowest-performing wells.",
+                "حلّل WCT و GOR للآبار الأقل أداءً.",
+            ),
+            choose(
+                "Quelles actions correctrices recommandez-vous pour les puits faibles ?",
+                "What corrective actions do you recommend for weak wells?",
+                "ما الإجراءات التصحيحية التي توصي بها للآبار الضعيفة؟",
+            ),
+            choose(
+                "Comparez la production annuelle 2023 vs 2024 du champ",
+                "Compare field annual production for 2023 vs 2024.",
+                "قارن الإنتاج السنوي للحقل بين 2023 و2024.",
+            ),
         ]
-    if any(w in q for w in ['bsw', 'gor', 'wct', 'water cut', 'réservoir', 'reservoir']):
+
+    if any(w in q for w in ['bsw', 'gor', 'wct', 'water cut', 'reservoir', 'réservoir']):
         return [
-            "Quels puits ont le BSW le plus élevé et quelle est la tendance ?",
-            "Analysez l'impact du water cut sur la production nette d'huile",
-            "Quelles recommandations G&G pour réduire le water cut ?",
+            choose(
+                "Quels puits ont le BSW le plus eleve et quelle est la tendance ?",
+                "Which wells have the highest BSW and what is the trend?",
+                "ما الآبار ذات أعلى BSW وما هو اتجاهه؟",
+            ),
+            choose(
+                "Analysez l'impact du water cut sur la production nette d'huile",
+                "Analyze the impact of water cut on net oil production.",
+                "حلّل تأثير الـ water cut على صافي إنتاج النفط.",
+            ),
+            choose(
+                "Quelles recommandations G&G pour reduire le water cut ?",
+                "What G&G recommendations can reduce water cut?",
+                "ما توصيات G&G لتقليل الـ water cut؟",
+            ),
         ]
+
     if any(w in q for w in ['liste', 'inventaire', 'tous les puits', 'combien']):
         return [
-            "Quel est le taux d'utilisation des puits actifs ?",
-            "Analysez la production globale du champ EZZAOUIA",
-            "Quels puits fermés ont le meilleur potentiel de réactivation ?",
+            choose(
+                "Quel est le taux d'utilisation des puits actifs ?",
+                "What is the utilization rate of active wells?",
+                "ما معدل استغلال الآبار النشطة؟",
+            ),
+            choose(
+                "Analysez la production globale du champ EZZAOUIA",
+                "Analyze the overall production of the EZZAOUIA field.",
+                "حلّل الإنتاج الإجمالي لحقل عزاوية.",
+            ),
+            choose(
+                "Quels puits fermes ont le meilleur potentiel de reactivation ?",
+                "Which shut-in wells have the best reactivation potential?",
+                "ما الآبار المغلقة ذات أفضل قابلية لإعادة التشغيل؟",
+            ),
         ]
+
     if re.search(r'\b20\d{2}\b', q):
         return [
-            "Comparez cette période avec l'année précédente",
-            "Quels événements opérationnels ont impacté la production cette année ?",
-            "Analysez la tendance mensuelle de la production sur cette période",
+            choose(
+                "Comparez cette periode avec l'annee precedente",
+                "Compare this period with the previous year.",
+                "قارن هذه الفترة بالسنة السابقة.",
+            ),
+            choose(
+                "Quels evenements operationnels ont impacte la production cette annee ?",
+                "Which operational events impacted production this year?",
+                "ما الأحداث التشغيلية التي أثرت على الإنتاج هذه السنة؟",
+            ),
+            choose(
+                "Analysez la tendance mensuelle de la production sur cette periode",
+                "Analyze the monthly production trend over this period.",
+                "حلّل الاتجاه الشهري للإنتاج خلال هذه الفترة.",
+            ),
         ]
+
     return [
-        "Analysez la performance globale du champ EZZAOUIA",
-        "Quels sont les top 5 puits producteurs actuellement ?",
-        "Montrez l'évolution mensuelle de la production du champ",
+        choose(
+            "Analysez la performance globale du champ EZZAOUIA",
+            "Analyze the overall performance of the EZZAOUIA field.",
+            "حلّل الأداء العام لحقل عزاوية.",
+        ),
+        choose(
+            "Quels sont les top 5 puits producteurs actuellement ?",
+            "What are the top 5 producing wells currently?",
+            "ما هي أفضل 5 آبار إنتاجاً حالياً؟",
+        ),
+        choose(
+            "Montrez l'evolution mensuelle de la production du champ",
+            "Show the monthly evolution of field production.",
+            "اعرض التطور الشهري لإنتاج الحقل.",
+        ),
     ]
 
 
-def ask(question, history=None, doc_id=None, filename=None):
+def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=None):
+    # Compatibilite : doc_ids (liste) prend priorite sur doc_id (singulier)
+    if doc_ids:
+        doc_id = doc_ids[0] if len(doc_ids) == 1 else None
+
     try:
+        lang = detect_language(question)
+        langue_nom = {
+            'fr': 'francais',
+            'en': 'anglais',
+            'ar': 'arabe',
+        }.get(lang, 'francais')
+
         q_lower = question.lower().strip()
-        salutations = ['bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'salam', 'merci']
+        salutations = [
+            'bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'salam', 'merci',
+            'مرحبا', 'السلام عليكم', 'شكرا',
+        ]
+
         if any(q_lower == s or q_lower.startswith(s + ' ') for s in salutations):
+            greeting = {
+                'fr': "Bonjour ! Je suis votre assistant expert pour le champ EZZAOUIA. Posez-moi une question sur la production, les puits ou les rapports techniques.",
+                'en': "Hello! I am your expert assistant for the EZZAOUIA field. Ask me about production, wells, or technical reports.",
+                'ar': "مرحباً! أنا مساعدك الخبير لحقل عزاوية. اطرح سؤالك حول الإنتاج أو الآبار أو التقارير التقنية.",
+            }.get(lang)
             return {
-                'answer': "Bonjour ! Je suis votre assistant expert pour le champ EZZAOUIA. Posez-moi une question sur la production, les puits ou les rapports techniques.",
-                'chart_data':  None,
-                'suggestions': [
-                    "Analyse la performance du champ EZZAOUIA",
-                    "Quels sont les top 5 puits producteurs ?",
-                    "Liste tous les puits actifs avec leur statut",
-                ],
+                'answer': greeting,
+                'chart_data': None,
+                'suggestions': generate_suggestions(question, well=None, lang=lang),
             }
+
         logger.info(f"Question : {question[:100]}")
 
         search_query = question
-        year_match   = re.search(r'\b(20\d{2})\b', question)
-        well_match   = re.search(r'\b(ezz?\s*[-#]?\s*\d+)\b', question, re.IGNORECASE)
+        year_match = re.search(r'\b(20\d{2})\b', question)
+        well_match = re.search(r'\b(ezz?\s*[-#]?\s*\d+)\b', question, re.IGNORECASE)
 
         if year_match:
-            search_query += f" {year_match.group(1)} activités opérations"
+            search_query += f" {year_match.group(1)} activites operations"
         if well_match:
             search_query += f" {well_match.group(1)} intervention workover"
 
-        doc_results = retrieve_smart(
-            query=search_query, doc_id=doc_id, filename=filename, k=6
-        )
+        doc_results = retrieve_smart(query=search_query, doc_id=doc_id, filename=filename, k=6)
 
         doc_context = ""
         if doc_results:
@@ -477,96 +598,88 @@ def ask(question, history=None, doc_id=None, filename=None):
 
         history_text = ""
         if history and len(history) > 0:
-            # Seulement le dernier échange pour éviter la confusion
             last = history[-1]
-            history_text = f"\n=== ÉCHANGE PRÉCÉDENT ===\nQ: {last['question']}\nR: {last['answer'][:200]}...\n"
+            history_text = f"\n=== ECHANGE PRECEDENT ===\nQ: {last['question']}\nR: {last['answer'][:200]}...\n"
+
+        from .memory import get_user_memory, update_user_memory
+        memory_context = get_user_memory(user) if user else ""
 
         available_docs = get_available_documents()
-        docs_list = "\n".join(f"- {d}" for d in available_docs) if available_docs else "Aucun document indexé"
+        docs_list = "\n".join(f"- {d}" for d in available_docs) if available_docs else "Aucun document indexe"
 
-        # Extract explicit "top N" number from the question
         top_n_match = re.search(r'\btop\s+(\d+)\b', question, re.IGNORECASE)
         top_n = int(top_n_match.group(1)) if top_n_match else None
         top_n_rule = (
-            f"\n6. La question demande exactement TOP {top_n} — tu DOIS lister "
-            f"exactement {top_n} éléments, ni plus ni moins, dans TOUTES les sections de ta réponse."
+            f"\n6. La question demande exactement TOP {top_n} - tu DOIS lister "
+            f"exactement {top_n} elements, ni plus ni moins, dans TOUTES les sections de ta reponse."
             if top_n else ""
         )
 
-        prompt = f"""Tu es un Expert Senior en Ingénierie de Production Pétrolière et Asset Management pour le champ EZZAOUIA (MARETAP, Tunisie – CPF Zarzis).
+        prompt = f"""Tu es un Expert Senior en Ingenierie de Production Petroliere et Asset Management pour le champ EZZAOUIA (MARETAP, Tunisie - CPF Zarzis).
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RÈGLES ABSOLUES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Français uniquement. Terminologie pétrolière internationale.
-2. Utilise UNIQUEMENT les données ci-dessous. Zéro hallucination.
-3. Info manquante → "Information non disponible dans les données actuelles."
-4. Ne jamais mélanger les informations de sources différentes.
-5. Hors sujet EZZAOUIA → "Hors périmètre."{top_n_rule}
+=== REGLES ABSOLUES ===
+1. LANGUE DETECTEE : {lang}
+   Reponds OBLIGATOIREMENT en {langue_nom}.
+   Si arabe -> utilise terminologie petroliere arabe standard.
+   Si anglais -> utilise international petroleum terminology.
+   Si francais -> terminologie petroliere francaise.
+2. Utilise UNIQUEMENT les donnees ci-dessous. Zero hallucination.
+3. Info manquante -> "Information non disponible dans les donnees actuelles."
+4. Ne jamais melanger les informations de sources differentes.
+5. Hors sujet EZZAOUIA -> "Hors perimetre."{top_n_rule}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DOCUMENTS DISPONIBLES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+=== LANGUE DE REPONSE ===
+Langue detectee : {lang}
+Reponds UNIQUEMENT dans cette langue.
+Terminologie technique adaptee a la langue.
+
+=== DOCUMENTS DISPONIBLES ===
 {docs_list}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FORMAT DE RÉPONSE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-▌ ANALYSE PERFORMANCE :
-  📊 SYNTHÈSE EXECUTIVE
-     ✅ Succès | ⚠️ Risques | 🎯 Actions prioritaires
-  📋 Indicateur | Valeur | Référence | Écart | Commentaire
-  🚨 ALERTES MANAGÉRIALES
+=== FORMAT DE REPONSE ===
+- ANALYSE PERFORMANCE : synthese executive + indicateurs + alertes manageriales.
+- RESERVOIR (WCT/GOR/pression) : tendances, risques, recommandations G&G.
+- HISTORIQUE (annee/evenement) : chronologie, donnees periode, impact production.
+- QUESTION SIMPLE : reponse directe (valeur + unite + source).
 
-▌ RÉSERVOIR (WCT/GOR/pression) :
-  📈 Tendance | 🔴 Risques | 💡 Recommandations G&G
-
-
-▌ HISTORIQUE (année/événement) :
-  📅 Chronologie | 📊 Données période | 💥 Impact production
-
-▌ QUESTION SIMPLE :
-  → Réponse directe : valeur + unité + source
+LANGUE : Remplir tous les tableaux en {lang}.
+Les en-tetes de colonnes restent dans la langue detectee.
 
 {history_text}
+{memory_context}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DONNÉES SQL SERVER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{sql_context if sql_context else "Aucune donnée SQL pertinente."}
+=== DONNEES SQL SERVER ===
+{sql_context if sql_context else "Aucune donnee SQL pertinente."}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DOCUMENTS TECHNIQUES INDEXÉS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{doc_context if doc_context else "Aucun extrait pertinent trouvé."}
+=== DOCUMENTS TECHNIQUES INDEXES ===
+{doc_context if doc_context else "Aucun extrait pertinent trouve."}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-QUESTION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+=== QUESTION ===
 {question}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ANALYSE EXPERTE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+=== ANALYSE EXPERTE ==="""
 
-        response = get_llm().invoke(prompt) # invoke ()envoie le prompt (question + contexte SQL) au modèle pour générer une réponse
-        answer   = response.strip()
-        logger.info(f"Réponse : {len(answer)} chars")
+        response = get_llm().invoke(prompt)
+        answer = response.strip()
+        logger.info(f"Reponse : {len(answer)} chars")
 
-        well       = normalize_well_code(question)
+        well = normalize_well_code(question)
         chart_data = build_chart_data(question) if detect_chart_request(question) else None
-        suggestions = generate_suggestions(question, well=well)
+        suggestions = generate_suggestions(question, well=well, lang=lang)
+
+        if user:
+            update_user_memory(user, question, answer, well=well)
 
         return {
-            'answer':      answer,
-            'chart_data':  chart_data,
+            'answer': answer,
+            'chart_data': chart_data,
             'suggestions': suggestions,
         }
 
     except Exception as e:
         logger.error(f"Erreur ask() : {e}")
         return {
-            'answer':      f"Erreur technique : {str(e)}",
-            'chart_data':  None,
+            'answer': f"Erreur technique : {str(e)}",
+            'chart_data': None,
             'suggestions': [],
         }

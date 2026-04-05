@@ -245,6 +245,30 @@
       font-size: 11px;
       color: var(--text-dim);
     }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .topbar-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-soft);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .topbar-link:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: var(--gold-dim);
+    }
  
     /* Messages */
     .messages-area { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
@@ -285,6 +309,21 @@
       font-family: 'Inter', sans-serif;
     }
     .suggestion-btn:hover { border-color: var(--gold); color: var(--text); background: var(--dark3); }
+    .morning-suggestions-wrap {
+      max-width: 560px;
+      margin: 0 auto 18px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(201,168,76,0.08), rgba(201,168,76,0.03));
+    }
+    .morning-suggestions-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 16px;
+      color: var(--gold);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
  
     /* Message rows */
     .msg-row { display: flex; gap: 12px; align-items: flex-start; max-width: 85%; }
@@ -387,6 +426,52 @@
     }
  
     .msg-row.user .msg-meta { justify-content: flex-end; }
+
+    .msg-rating {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .rating-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-right: 2px;
+    }
+
+    .rate-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid var(--border-soft);
+      background: var(--dark3);
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .rate-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .rate-btn.up.active {
+      border-color: rgba(77,170,122,0.6);
+      background: rgba(77,170,122,0.15);
+      color: var(--green);
+    }
+
+    .rate-btn.down.active {
+      border-color: rgba(224,85,85,0.6);
+      background: rgba(224,85,85,0.15);
+      color: var(--red);
+    }
  
     .thinking-dots {
       display: flex;
@@ -471,7 +556,49 @@
       transition: color 0.15s;
     }
     .doc-filter-remove:hover { color: var(--red); }
- 
+
+    /* Multi-doc badges */
+    #docFilterContainer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      border: 1px solid;
+      max-width: 220px;
+    }
+    .doc-badge-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 160px;
+    }
+    .doc-badge.pdf  { background: rgba(224,85,85,0.1);  border-color: rgba(224,85,85,0.35);  color: #E05555; }
+    .doc-badge.docx { background: rgba(74,144,226,0.1); border-color: rgba(74,144,226,0.35); color: #4A90E2; }
+    .doc-badge.xlsx { background: rgba(77,170,122,0.1); border-color: rgba(77,170,122,0.35); color: var(--green); }
+    .doc-badge.tcm  { background: rgba(201,168,76,0.12); border-color: var(--border); color: var(--gold); font-weight: 600; }
+
+    .btn-clear-all {
+      padding: 4px 10px;
+      background: transparent;
+      border: 1px solid rgba(224,85,85,0.3);
+      border-radius: 6px;
+      color: var(--red);
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+    .btn-clear-all:hover { background: rgba(224,85,85,0.1); }
+
     .upload-status { font-size: 12px; }
  
     .input-row { display: flex; gap: 10px; align-items: flex-end; }
@@ -576,6 +703,8 @@
     .btn-cancel:hover { border-color: var(--gold); color: var(--text); }
     .btn-confirm-delete { background: rgba(224,85,85,0.15); color: var(--red); border-color: rgba(224,85,85,0.3); }
     .btn-confirm-delete:hover { background: rgba(224,85,85,0.25); }
+    .btn-stay-connected { background: var(--gold-dim); color: var(--gold); border-color: var(--border); }
+    .btn-stay-connected:hover { background: rgba(201,168,76,0.22); border-color: var(--gold); }
 
     /* ── Light mode variables ── */
     html[data-theme="light"] {
@@ -740,6 +869,14 @@
   </div>
  
   <div class="sessions-footer">
+    {% if user.is_admin %}
+    <a href="{% url 'chatbot:stats' %}" class="btn-back" style="margin-bottom:10px;">
+      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+      </svg>
+      Voir statistiques
+    </a>
+    {% endif %}
     <a href="{% url 'dashboard:home' %}" class="btn-back">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>
@@ -764,18 +901,27 @@
         </div>
       </div>
     </div>
-    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
-      <svg class="icon-sun" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-      </svg>
-      <svg class="icon-moon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-      </svg>
-    </button>
+    <div class="topbar-right">
+      <a href="{% url 'bibliotheque:index' %}" class="topbar-link">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+        </svg>
+        Bibliotheque
+      </a>
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+        <svg class="icon-sun" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <svg class="icon-moon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+        </svg>
+      </button>
+    </div>
   </div>
  
   <div class="messages-area" id="messagesArea">
     {% if not messages %}
+    <div id="morningSuggestionsMount"></div>
     <div class="welcome-wrap">
       <div class="welcome-icon">
         <svg width="28" height="28" fill="none" stroke="#C9A84C" viewBox="0 0 24 24">
@@ -812,6 +958,11 @@
           </svg>
           {{ msg.duration }}s · {{ msg.created_at|date:"d/m/Y H:i" }}
         </div>
+        <div class="msg-rating" data-message-id="{{ msg.id }}">
+          <span class="rating-label">Evaluation :</span>
+          <button class="rate-btn up {% if msg.is_satisfied == True %}active{% endif %}" onclick="rateMessage({{ msg.id }}, true, this)" title="Satisfait">&#128077;</button>
+          <button class="rate-btn down {% if msg.is_satisfied == False %}active{% endif %}" onclick="rateMessage({{ msg.id }}, false, this)" title="Insatisfait">&#128078;</button>
+        </div>
       </div>
     </div>
     {% endfor %}
@@ -824,17 +975,12 @@
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/>
         </svg>
-        Joindre un document
+        Joindre des documents
       </button>
-      <input type="file" id="fileInput" accept=".pdf,.docx" onchange="uploadDoc(this)">
+      <input type="file" id="fileInput" accept=".pdf,.docx,.xlsx" multiple onchange="uploadMultipleDocs(this)">
       <span class="upload-status" id="uploadStatus"></span>
-      <div id="docFilterBadge" style="display:none" class="doc-filter-badge">
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-        </svg>
-        <span id="docFilterName"></span>
-        <span class="doc-filter-remove" onclick="clearDoc()" title="Désactiver">×</span>
-      </div>
+      <div id="docFilterContainer"></div>
+      <button class="btn-clear-all" id="btnClearAll" style="display:none" onclick="clearAllDocs()">✕ Tout effacer</button>
     </div>
  
     <div class="input-row">
@@ -851,7 +997,7 @@
         </svg>
       </button>
     </div>
-    <div class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne · PDF/Word acceptés</div>
+    <div class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne · PDF/Word/Excel acceptés · Sélection multiple possible</div>
   </div>
 </div>
  
@@ -866,14 +1012,68 @@
     </div>
   </div>
 </div>
+
+<!-- Session warning modal -->
+<div class="modal-overlay" id="sessionExpiryModal">
+  <div class="modal-box">
+    <h3>Session presque expiree</h3>
+    <p>Votre session expire dans 5 minutes. Cliquez pour rester connecte.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSessionExpiryModal()">Plus tard</button>
+      <button class="btn-stay-connected" id="btnStayConnected">Rester connecte</button>
+    </div>
+  </div>
+</div>
  
 <script>
   const area    = document.getElementById('messagesArea');
   const qInput  = document.getElementById('qInput');
   const sendBtn = document.getElementById('sendBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const SESSION_WARNING_DELAY_MS = 25 * 60 * 1000;
+  let sessionWarningTimer = null;
 
   let abortController = null;
+
+  function showSessionExpiryModal() {
+    const modal = document.getElementById('sessionExpiryModal');
+    if (modal) modal.classList.add('show');
+  }
+
+  function closeSessionExpiryModal() {
+    const modal = document.getElementById('sessionExpiryModal');
+    if (modal) modal.classList.remove('show');
+  }
+
+  function startSessionWarningTimer() {
+    if (sessionWarningTimer) clearTimeout(sessionWarningTimer);
+    sessionWarningTimer = setTimeout(showSessionExpiryModal, SESSION_WARNING_DELAY_MS);
+  }
+
+  async function keepSessionAlive() {
+    const btn = document.getElementById('btnStayConnected');
+    if (!btn) return;
+
+    const oldLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Renouvellement...';
+
+    try {
+      const resp = await fetch("{% url 'accounts:ping' %}", {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+
+      if (!resp.ok) throw new Error('ping-failed');
+      closeSessionExpiryModal();
+      startSessionWarningTimer();
+    } catch (_) {
+      window.location.href = "{% url 'accounts:login' %}?next={{ request.path|urlencode }}";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+    }
+  }
 
   function setLoading(on) {
     if (on) {
@@ -899,16 +1099,20 @@
 
   const SID_RAW = "{{ session_id_js }}";
   let sessionId  = (SID_RAW === 'null' || SID_RAW === '') ? null : parseInt(SID_RAW);
-  let activeDocId   = null;
-  let activeDocName = null;
+  let activeDocIds   = [];   // liste des doc_ids actifs
+  let activeDocNames = [];   // liste des noms de fichiers actifs
+  const PRESELECTED_DOCS = {{ preselected_docs_json|safe }};
  
   area.scrollTop = area.scrollHeight;
  
   function renderMarkdown(text) {
-    if (typeof marked !== 'undefined') {
-      return marked.parse(text);
-    }
-    return text;
+    if (!text) return '';
+    try {
+      if (typeof marked !== 'undefined') {
+        return marked.parse(String(text));
+      }
+    } catch (_) {}
+    return String(text);
   }
  
   // Render existing bot messages with markdown on page load
@@ -917,16 +1121,123 @@
   });
  
   function setQ(t) { qInput.value = t; qInput.focus(); }
- 
-  function setDoc(id, name) {
-    activeDocId = id; activeDocName = name;
-    document.getElementById('docFilterBadge').style.display = 'flex';
-    document.getElementById('docFilterName').textContent = name;
+
+  function getPriorityIcon(priority) {
+    if (priority === 'critical') return '🔴';
+    if (priority === 'attention') return '🟡';
+    return '🟢';
+  }
+
+  async function loadMorningSuggestions() {
+    const welcome = area.querySelector('.welcome-wrap');
+    if (!welcome) return;
+
+    try {
+      const resp = await fetch("{% url 'chatbot:morning_suggestions' %}", {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 5) : [];
+      if (!suggestions.length) return;
+
+      const mount = document.getElementById('morningSuggestionsMount');
+      if (!mount) return;
+
+      const titleText = (data.period === 'afternoon')
+        ? "💡 Sujets de suivi de l'apres-midi"
+        : "💡 Sujets d'analyse recommandes aujourd'hui";
+
+      const wrap = document.createElement('div');
+      wrap.className = 'morning-suggestions-wrap';
+
+      const title = document.createElement('div');
+      title.className = 'morning-suggestions-title';
+      title.textContent = titleText;
+      wrap.appendChild(title);
+
+      const grid = document.createElement('div');
+      grid.className = 'suggestions-grid';
+
+      suggestions.forEach((item) => {
+        const text = String(item && item.text ? item.text : '').trim();
+        if (!text) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'suggestion-btn';
+        btn.textContent = `${item.icon || getPriorityIcon(item.priority)} ${text}`;
+        btn.addEventListener('click', () => setQ(text));
+        grid.appendChild(btn);
+      });
+
+      if (!grid.children.length) return;
+
+      wrap.appendChild(grid);
+      mount.innerHTML = '';
+      mount.appendChild(wrap);
+    } catch (_) {
+      // Silent fallback: keep welcome block only
+    }
   }
  
-  function clearDoc() {
-    activeDocId = null; activeDocName = null;
-    document.getElementById('docFilterBadge').style.display = 'none';
+  function getDocExt(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return 'pdf';
+    if (['docx', 'doc'].includes(ext)) return 'docx';
+    if (['xlsx', 'xls'].includes(ext)) return 'xlsx';
+    return 'pdf';
+  }
+
+  function renderDocBadges() {
+    const container = document.getElementById('docFilterContainer');
+    const btnClear  = document.getElementById('btnClearAll');
+    container.innerHTML = '';
+
+    activeDocNames.forEach((name, i) => {
+      const ext   = getDocExt(name);
+      const label = name.length > 25 ? name.slice(0, 22) + '…' : name;
+      const badge = document.createElement('div');
+      badge.className = 'doc-badge ' + ext;
+      badge.title = name;
+      badge.innerHTML =
+        '<span class="doc-badge-name">' + label + '</span>' +
+        '<span class="doc-filter-remove" onclick="removeDoc(' + i + ')" title="Retirer">×</span>';
+      container.appendChild(badge);
+    });
+
+    if (activeDocIds.length > 1) {
+      const tcm = document.createElement('div');
+      tcm.className = 'doc-badge tcm';
+      tcm.innerHTML = '📁 TCM — ' + activeDocIds.length + ' fichiers actifs';
+      container.appendChild(tcm);
+    }
+
+    btnClear.style.display = activeDocIds.length > 0 ? 'inline-flex' : 'none';
+  }
+
+  function removeDoc(index) {
+    activeDocIds.splice(index, 1);
+    activeDocNames.splice(index, 1);
+    renderDocBadges();
+  }
+
+  function clearAllDocs() {
+    activeDocIds   = [];
+    activeDocNames = [];
+    renderDocBadges();
+  }
+
+  if (Array.isArray(PRESELECTED_DOCS) && PRESELECTED_DOCS.length > 0) {
+    PRESELECTED_DOCS.forEach(doc => {
+      if (!doc || !doc.id) return;
+      if (!activeDocIds.includes(doc.id)) {
+        activeDocIds.push(doc.id);
+        activeDocNames.push(doc.name || ('Document #' + doc.id));
+      }
+    });
+    renderDocBadges();
   }
  
   function addMsg(html, type) {
@@ -951,6 +1262,46 @@
     area.scrollTop = area.scrollHeight;
     return row.querySelector('.msg-content');
   }
+
+  function ratingControlsHtml(messageId, currentRating) {
+    if (!messageId) return '';
+    const upActive = currentRating === true ? ' active' : '';
+    const downActive = currentRating === false ? ' active' : '';
+    return (
+      '<div class="msg-rating" data-message-id="' + messageId + '">' +
+        '<span class="rating-label">Evaluation :</span>' +
+        '<button class="rate-btn up' + upActive + '" onclick="rateMessage(' + messageId + ', true, this)" title="Satisfait">&#128077;</button>' +
+        '<button class="rate-btn down' + downActive + '" onclick="rateMessage(' + messageId + ', false, this)" title="Insatisfait">&#128078;</button>' +
+      '</div>'
+    );
+  }
+
+  async function rateMessage(messageId, rating, buttonEl) {
+    try {
+      const resp = await fetch("{% url 'chatbot:rate' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}',
+        },
+        body: JSON.stringify({ message_id: messageId, rating: rating }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        alert(data.error || 'Erreur notation.');
+        return;
+      }
+
+      const wrap = buttonEl.closest('.msg-rating');
+      if (!wrap) return;
+      const upBtn = wrap.querySelector('.rate-btn.up');
+      const downBtn = wrap.querySelector('.rate-btn.down');
+      if (upBtn) upBtn.classList.toggle('active', rating === true);
+      if (downBtn) downBtn.classList.toggle('active', rating === false);
+    } catch (_) {
+      alert('Erreur de connexion pour la notation.');
+    }
+  }
  
   async function sendQ() {
     const q = qInput.value.trim();
@@ -966,8 +1317,8 @@
 
     try {
       const payload = { question: q, session_id: sessionId };
-      if (activeDocId)   payload.doc_id   = activeDocId;
-      if (activeDocName) payload.filename  = activeDocName;
+      if (activeDocIds.length > 0)  payload.doc_ids  = activeDocIds;
+      if (activeDocNames.length > 0) payload.filename = activeDocNames[0];
 
       const resp = await fetch("{% url 'chatbot:ask' %}", {
         method: 'POST',
@@ -978,7 +1329,9 @@
 
       const data = await resp.json();
 
-      if (data.error) {
+      if (data.stopped) {
+        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Génération arrêtée.</div>';
+      } else if (data.error) {
         thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Erreur : ' + data.error + '</div>';
       } else {
         thinkingContent.innerHTML =
@@ -986,7 +1339,8 @@
           '<div class="msg-meta">' +
             '<svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
             data.duration + 's' +
-          '</div>';
+          '</div>' +
+          ratingControlsHtml(data.message_id, null);
 
         if (data.chart_data) renderChart(thinkingContent, data.chart_data);
         if (data.suggestions && data.suggestions.length) renderSuggestions(thinkingContent, data.suggestions);
@@ -1009,6 +1363,62 @@
     area.scrollTop = area.scrollHeight;
   }
  
+  async function uploadMultipleDocs(input) {
+    const files = Array.from(input.files);
+    if (!files.length) return;
+
+    const status = document.getElementById('uploadStatus');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = `Indexation de ${files.length} fichier(s)...`;
+
+    let success = 0;
+    let errors  = 0;
+
+    for (const file of files) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        const resp = await fetch("{% url 'chatbot:upload' %}", {
+          method: 'POST',
+          body: fd
+        });
+        const data = await resp.json();
+
+        if (data.error) {
+          errors++;
+          console.error('Erreur fichier', file.name, data.error);
+        } else {
+          if (!activeDocIds.includes(data.doc_id)) {
+            activeDocIds.push(data.doc_id);
+            activeDocNames.push(data.filename);
+          }
+          success++;
+        }
+      } catch (e) {
+        errors++;
+        console.error('Erreur upload', file.name, e);
+      }
+    }
+
+    status.textContent = '';
+    renderDocBadges();
+
+    const notif = document.createElement('div');
+    notif.className = 'file-notif';
+    notif.innerHTML =
+      '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
+      success + ' fichier(s) indexé(s) avec succès.' +
+      (errors > 0 ? ' ' + errors + ' erreur(s).' : '') +
+      ' Le chatbot interroge maintenant tous les documents actifs.';
+    document.getElementById('messagesArea').appendChild(notif);
+    document.getElementById('messagesArea').scrollTop = 99999;
+
+    input.value = '';
+  }
+
   async function uploadDoc(el) {
     const file = el.files[0];
     if (!file) return;
@@ -1030,13 +1440,19 @@
         status.textContent = data.error;
       } else {
         status.textContent = '';
-        setDoc(data.doc_id, data.filename);
+        // Ajouter à la liste active (pas de remplacement)
+        if (!activeDocIds.includes(data.doc_id)) {
+          activeDocIds.push(data.doc_id);
+          activeDocNames.push(data.filename);
+        }
+        renderDocBadges();
         const notif = document.createElement('div');
         notif.className = 'file-notif';
         notif.innerHTML =
           '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
-          '"' + data.filename + '" indexé (' + data.chunks + ' segments). Filtre actif.';
+          '"' + data.filename + '" indexé (' + data.chunks + ' segments). ' +
+          (activeDocIds.length > 1 ? activeDocIds.length + ' fichiers actifs.' : 'Filtre actif.');
         area.appendChild(notif);
         area.scrollTop = area.scrollHeight;
       }
@@ -1150,6 +1566,21 @@
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
   });
+
+  const sessionExpiryModal = document.getElementById('sessionExpiryModal');
+  if (sessionExpiryModal) {
+    sessionExpiryModal.addEventListener('click', function(e) {
+      if (e.target === this) closeSessionExpiryModal();
+    });
+  }
+
+  const btnStayConnected = document.getElementById('btnStayConnected');
+  if (btnStayConnected) {
+    btnStayConnected.addEventListener('click', keepSessionAlive);
+  }
+
+  startSessionWarningTimer();
+  loadMorningSuggestions();
 
   /* ---- Chart rendering ---- */
   const _chartInstances = {};

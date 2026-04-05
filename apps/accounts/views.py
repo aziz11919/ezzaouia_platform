@@ -1,9 +1,11 @@
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
 from django.contrib import messages
 from django.db.models import Q
 from functools import wraps
+from apps.audit.models import AuditLog
 from .models import User
 
 
@@ -45,6 +47,12 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
+            AuditLog.log(
+                action=AuditLog.Action.LOGIN,
+                user=user,
+                request=request,
+                details={'path': request.path},
+            )
             next_url = request.GET.get('next')
             if next_url:
                 return redirect(next_url)
@@ -57,8 +65,19 @@ def login_view(request):
 
 @login_required
 def logout_view(request):
+    AuditLog.log(
+        action=AuditLog.Action.LOGOUT,
+        user=request.user,
+        request=request,
+        details={'path': request.path},
+    )
     logout(request)
     return redirect('accounts:login')
+
+
+@login_required
+def session_ping(request):
+    return JsonResponse({"status": "ok"})
 
 
 # ── Profil utilisateur ───────────────────────────────────────────

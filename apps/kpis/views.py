@@ -68,10 +68,12 @@ class TopProducersView(APIView):
 
     def get(self, request):
         year  = request.GET.get('year')
+        month = request.GET.get('month')
         limit = int(request.GET.get('limit', 5))
         data  = get_top_producers(
             limit=limit,
             year=int(year) if year else None,
+            month=int(month) if month else None,
         )
         return Response(data)
 

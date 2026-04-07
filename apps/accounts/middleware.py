@@ -5,6 +5,28 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 
+EXEMPT_PATHS = {
+    '/accounts/change-password/',
+    '/accounts/logout/',
+    '/accounts/login/',
+}
+
+
+class ForcePasswordChangeMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            request.user.is_authenticated
+            and getattr(request.user, 'must_change_password', False)
+            and not any(request.path.startswith(p) for p in EXEMPT_PATHS)
+            and not request.path.startswith('/static/')
+        ):
+            return redirect('accounts:change_password')
+
+        return self.get_response(request)
+
 
 class SessionTimeoutMiddleware:
     timeout_seconds = 1800

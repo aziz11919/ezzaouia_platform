@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'apps.accounts.middleware.SessionTimeoutMiddleware',
+    'apps.accounts.middleware.ForcePasswordChangeMiddleware',
     'apps.audit.middleware.AuditMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -168,6 +169,18 @@ ONEDRIVE_SYNC_DIR = config(
     'ONEDRIVE_SYNC_DIR',
     default=r'C:\Users\Mega-PC\OneDrive - MARETAP SA\Attachments\aaaaa',
 )
+
+# ── Email — MARETAP internal Outlook ─────────────────────────────
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = config('EMAIL_HOST',          default='smtp.maretap.tn')
+EMAIL_PORT          = config('EMAIL_PORT',          default=587, cast=int)
+EMAIL_USE_TLS       = True
+EMAIL_HOST_USER     = config('EMAIL_HOST_USER',     default='noreply@maretap.tn')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL  = 'EZZAOUIA Platform <noreply@maretap.tn>'
+
+# Platform base URL used in emails
+PLATFORM_HOST = config('PLATFORM_HOST', default='192.168.87.x:8000')
 
 # ── Logging ───────────────────────────────────────────────────────
 LOGGING = {

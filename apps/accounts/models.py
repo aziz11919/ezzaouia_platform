@@ -11,6 +11,12 @@ class User(AbstractUser):
     department = models.CharField(max_length=100, blank=True)
     phone      = models.CharField(max_length=20, blank=True)
 
+    # Password management
+    must_change_password    = models.BooleanField(default=True)
+    password_reset_token    = models.CharField(max_length=64, null=True, blank=True)
+    password_reset_expires  = models.DateTimeField(null=True, blank=True)
+    last_password_change    = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name        = 'User'
         verbose_name_plural = 'Users'

@@ -1104,6 +1104,31 @@
       Back to dashboard
     </a>
   </div>
+  <div style="padding:12px 20px;border-top:1px solid var(--border);">
+    <a href="/accounts/profile/" style="text-decoration:none;display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:var(--gold);flex-shrink:0;">
+        {{ user.username|first|upper }}
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text);font-weight:500;">{{ user.get_full_name|default:user.username }}</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:1px;">{{ user.department|default:user.get_role_display }}</div>
+      </div>
+    </a>
+    <div style="display:flex;gap:6px;">
+      <a href="/accounts/profile/" class="btn-back" style="flex:1;justify-content:center;padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        Profile
+      </a>
+      <a href="/accounts/logout/" class="btn-back" style="flex:1;justify-content:center;padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
+        </svg>
+        Logout
+      </a>
+    </div>
+  </div>
 </div>
  
 <!-- Chat -->

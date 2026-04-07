@@ -212,7 +212,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <a href="{% url 'accounts:profile' %}" class="btn btn-ghost" style="font-size:12px;padding:7px 14px;">
+      <a href="{% url 'accounts:edit_profile' %}" class="btn btn-ghost" style="font-size:12px;padding:7px 14px;">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
         My Profile
       </a>
@@ -281,7 +281,7 @@
       {% if search or role_filter or active_filter %}
       <a href="{% url 'accounts:user_list' %}" class="btn btn-ghost">Reset</a>
       {% endif %}
-      <a href="{% url 'accounts:user_create' %}" class="btn btn-primary" style="margin-left:auto;">
+      <a href="{% url 'accounts:create_user' %}" class="btn btn-primary" style="margin-left:auto;">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.5v15m7.5-7.5h-15"/></svg>
         New user
       </a>

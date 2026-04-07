@@ -19,7 +19,7 @@ def role_required(*roles):
         def wrapper(request, *args, **kwargs):
             if request.user.role in roles:
                 return view_func(request, *args, **kwargs)
-            messages.error(request, "Accès non autorisé.")
+            messages.error(request, "Unauthorized access.")
             return redirect('dashboard:home')
         return wrapper
     return decorator
@@ -58,7 +58,7 @@ def login_view(request):
                 return redirect(next_url)
             return redirect('dashboard:home')
         else:
-            messages.error(request, "Identifiant ou mot de passe incorrect.")
+            messages.error(request, "Incorrect username or password.")
 
     return render(request, 'accounts/login.html')
 
@@ -94,19 +94,19 @@ def profile_view(request):
             profile_form = ProfileForm(request.POST, instance=request.user)
             if profile_form.is_valid():
                 profile_form.save()
-                messages.success(request, "Profil mis à jour avec succès.")
+                messages.success(request, "Profile updated successfully.")
                 return redirect('accounts:profile')
 
         elif 'change_password' in request.POST:
             pwd_form = ChangePasswordForm(request.POST)
             if pwd_form.is_valid():
                 if not request.user.check_password(pwd_form.cleaned_data['current_password']):
-                    pwd_form.add_error('current_password', "Mot de passe actuel incorrect.")
+                    pwd_form.add_error('current_password', "Current password is incorrect.")
                 else:
                     request.user.set_password(pwd_form.cleaned_data['new_password'])
                     request.user.save()
                     update_session_auth_hash(request, request.user)
-                    messages.success(request, "Mot de passe modifié avec succès.")
+                    messages.success(request, "Password changed successfully.")
                     return redirect('accounts:profile')
 
     return render(request, 'accounts/profile.html', {
@@ -167,7 +167,7 @@ def user_create(request):
         form = UserCreateForm(request.POST)
         if form.is_valid():
             user = form.save()
-            messages.success(request, f"Utilisateur « {user.username} » créé avec succès.")
+            messages.success(request, f"User '{user.username}' created successfully.")
             return redirect('accounts:user_list')
     else:
         form = UserCreateForm(initial={'is_active': True, 'role': User.Role.INGENIEUR})
@@ -175,7 +175,7 @@ def user_create(request):
     return render(request, 'accounts/user_form.html', {
         'form':   form,
         'action': 'create',
-        'title':  'Créer un utilisateur',
+        'title':  'Create user',
     })
 
 
@@ -193,21 +193,21 @@ def user_edit(request, user_id):
             if pwd_form.is_valid():
                 target.set_password(pwd_form.cleaned_data['password'])
                 target.save()
-                messages.success(request, "Mot de passe réinitialisé.")
+                messages.success(request, "Password reset successfully.")
                 return redirect('accounts:user_edit', user_id=user_id)
 
         else:
             form = UserEditForm(request.POST, instance=target)
             if form.is_valid():
                 form.save()
-                messages.success(request, "Utilisateur modifié avec succès.")
+                messages.success(request, "User updated successfully.")
                 return redirect('accounts:user_list')
 
     return render(request, 'accounts/user_form.html', {
         'form':        form,
         'pwd_form':    pwd_form,
         'action':      'edit',
-        'title':       f"Modifier — {target.get_full_name() or target.username}",
+        'title':       f"Edit — {target.get_full_name() or target.username}",
         'target_user': target,
     })
 
@@ -216,12 +216,12 @@ def user_edit(request, user_id):
 def user_toggle(request, user_id):
     target = get_object_or_404(User, id=user_id)
     if target == request.user:
-        messages.error(request, "Vous ne pouvez pas désactiver votre propre compte.")
+        messages.error(request, "You cannot deactivate your own account.")
     else:
         target.is_active = not target.is_active
         target.save(update_fields=['is_active'])
-        etat = "activé" if target.is_active else "désactivé"
-        messages.success(request, f"Compte de « {target.username} » {etat}.")
+        state = "activated" if target.is_active else "deactivated"
+        messages.success(request, f"Account '{target.username}' {state}.")
     return redirect('accounts:user_list')
 
 
@@ -229,11 +229,11 @@ def user_toggle(request, user_id):
 def user_delete(request, user_id):
     target = get_object_or_404(User, id=user_id)
     if target == request.user:
-        messages.error(request, "Vous ne pouvez pas supprimer votre propre compte.")
+        messages.error(request, "You cannot delete your own account.")
         return redirect('accounts:user_list')
     if request.method == 'POST':
         name = target.get_full_name() or target.username
         target.delete()
-        messages.success(request, f"Utilisateur « {name} » supprimé.")
+        messages.success(request, f"User '{name}' deleted.")
         return redirect('accounts:user_list')
     return render(request, 'accounts/user_confirm_delete.html', {'target_user': target})

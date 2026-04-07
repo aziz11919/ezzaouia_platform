@@ -1,11 +1,11 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EZZAOUIA — Assistant IA</title>
+  <title>EZZAOUIA — AI Assistant</title>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -821,6 +821,215 @@
       line-height: 1.4;
     }
     .suggestion-chip:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+
+    /* ── Comments zone ── */
+    .comment-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      padding: 4px 10px;
+      background: transparent;
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .comment-toggle-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .comment-toggle-btn.has-comments { color: var(--text-muted); }
+
+    .comment-zone {
+      display: none;
+      margin-top: 10px;
+      background: var(--dark3);
+      border-left: 3px solid var(--red);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 14px;
+    }
+    .comment-zone.open { display: block; }
+
+    .comment-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+    .comment-item {
+      font-size: 12px;
+      padding: 8px 10px;
+      background: var(--dark4);
+      border-radius: 6px;
+      line-height: 1.5;
+    }
+    .comment-item-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .comment-author { font-weight: 500; color: var(--gold); }
+    .comment-date { color: var(--text-dim); font-size: 10px; }
+    .comment-private-icon { font-size: 11px; color: var(--text-dim); }
+    .comment-text { color: var(--text-muted); }
+
+    .comment-form { display: flex; flex-direction: column; gap: 6px; }
+    .comment-textarea {
+      background: var(--dark4);
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      resize: none;
+      min-height: 52px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .comment-textarea:focus { border-color: var(--gold); }
+    .comment-textarea::placeholder { color: var(--text-dim); }
+
+    .comment-form-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .comment-visibility-toggle {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    .comment-visibility-toggle input { cursor: pointer; accent-color: var(--gold); }
+    .btn-add-comment {
+      margin-left: auto;
+      padding: 5px 14px;
+      background: var(--gold-dim);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--gold);
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-add-comment:hover { background: rgba(201,168,76,0.22); border-color: var(--gold); }
+    .comment-empty { font-size: 11px; color: var(--text-dim); font-style: italic; }
+    html[data-theme="light"] .comment-item { background: var(--dark3); }
+    html[data-theme="light"] .comment-textarea { background: var(--dark3); }
+
+    /* ── Share modal — user picker ── */
+    .user-search-input {
+      width: 100%;
+      padding: 8px 12px;
+      margin: 10px 0 8px;
+      background: var(--dark3);
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .user-search-input:focus { border-color: var(--gold); }
+    .user-search-input::placeholder { color: var(--text-dim); }
+
+    .user-list {
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s;
+      border: 1px solid transparent;
+    }
+    .user-item:hover { background: var(--dark3); border-color: var(--border-soft); }
+    .user-item.selected { background: var(--gold-dim); border-color: var(--border); }
+    .user-item input[type="checkbox"] { cursor: pointer; accent-color: var(--gold); flex-shrink: 0; }
+    .user-item-info { flex: 1; min-width: 0; }
+    .user-item-name { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .user-item-sub { font-size: 11px; color: var(--text-dim); }
+
+    .btn-confirm-share {
+      padding: 8px 20px;
+      background: var(--gold-dim);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--gold);
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-confirm-share:hover { background: rgba(201,168,76,0.22); border-color: var(--gold); }
+    .btn-confirm-share:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── "Shared with me" section ── */
+    .shared-section-label {
+      padding: 6px 12px 4px;
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-top: 1px solid var(--border-soft);
+      margin-top: 6px;
+    }
+    .session-item.shared-item { border-left: 2px solid var(--gold-dim); opacity: 0.9; }
+    .session-item.shared-item:hover { opacity: 1; }
+
+    /* ── Related comments notification ── */
+    .related-comments-section {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(201,168,76,0.05);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--gold);
+      border-radius: 0 8px 8px 0;
+    }
+    .related-comments-title {
+      font-size: 11px;
+      color: var(--gold);
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .related-comment-block {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .related-comment-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .related-comment-q {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-bottom: 5px;
+      line-height: 1.4;
+    }
+    .related-comment-entry {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 5px 8px;
+      background: var(--dark3);
+      border-radius: 5px;
+      margin-bottom: 4px;
+      line-height: 1.5;
+    }
+    .related-comment-author { color: var(--gold-light); font-weight: 500; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -836,7 +1045,7 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.5v15m7.5-7.5h-15"/>
       </svg>
-      Nouvelle conversation
+      New conversation
     </a>
   </div>
  
@@ -846,15 +1055,20 @@
        class="session-item {% if current_session.id == s.id %}active{% endif %}">
       <div class="session-info">
         <div class="session-title" id="stitle-{{ s.id }}">{{ s.title|truncatechars:38 }}</div>
-        <div class="session-date">{{ s.created_at|date:"d/m/Y à H:i" }}</div>
+        <div class="session-date">{{ s.created_at|date:"d/m/Y H:i" }}</div>
       </div>
       <div class="session-actions">
-        <button class="session-action-btn" onclick="event.preventDefault();event.stopPropagation();startRename({{ s.id }},'{{ s.title|escapejs }}')" title="Renommer">
+        <button class="session-action-btn" onclick="event.preventDefault();event.stopPropagation();startRename({{ s.id }},'{{ s.title|escapejs }}')" title="Rename">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
           </svg>
         </button>
-        <button class="session-action-btn delete" onclick="event.preventDefault();event.stopPropagation();confirmDelete({{ s.id }})" title="Supprimer">
+        <button class="session-action-btn" onclick="event.preventDefault();event.stopPropagation();shareSession({{ s.id }})" title="Share">
+          <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+          </svg>
+        </button>
+        <button class="session-action-btn delete" onclick="event.preventDefault();event.stopPropagation();confirmDelete({{ s.id }})" title="Delete">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
           </svg>
@@ -862,10 +1076,16 @@
       </div>
     </a>
     {% empty %}
-    <div style="padding:24px;text-align:center;color:var(--text-dim);font-size:12px;">
-      Aucune conversation
+    <div id="noConvMsg" style="padding:24px;text-align:center;color:var(--text-dim);font-size:12px;">
+      No conversations
     </div>
     {% endfor %}
+
+    <!-- Sessions shared with me -->
+    <div id="sharedWithMeSection" style="display:none">
+      <div class="shared-section-label">Shared with me</div>
+      <div id="sharedWithMeList"></div>
+    </div>
   </div>
  
   <div class="sessions-footer">
@@ -874,14 +1094,14 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
       </svg>
-      Voir statistiques
+      View stats
     </a>
     {% endif %}
     <a href="{% url 'dashboard:home' %}" class="btn-back">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>
       </svg>
-      Retour au dashboard
+      Back to dashboard
     </a>
   </div>
 </div>
@@ -892,12 +1112,12 @@
     <div class="topbar-left">
       <div class="ai-indicator">
         <div class="ai-dot"></div>
-        <div class="ai-label">Assistant actif</div>
+        <div class="ai-label">Assistant online</div>
       </div>
       <div>
         <div class="topbar-title">Expert Production EZZAOUIA</div>
         <div class="topbar-sub">
-          {% if current_session %}{{ current_session.title|truncatechars:50 }}{% else %}Champ EZZAOUIA · CPF Zarzis · MARETAP{% endif %}
+          {% if current_session %}{{ current_session.title|truncatechars:50 }}{% else %}EZZAOUIA Field · CPF Zarzis · MARETAP{% endif %}
         </div>
       </div>
     </div>
@@ -906,9 +1126,9 @@
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
         </svg>
-        Bibliotheque
+        Library
       </a>
-      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light mode">
         <svg class="icon-sun" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
@@ -928,16 +1148,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
         </svg>
       </div>
-      <div class="welcome-title">Bonjour, {{ request.user.get_full_name|default:request.user.username }}</div>
+      <div class="welcome-title">Hello, {{ request.user.get_full_name|default:request.user.username }}</div>
       <div class="welcome-sub">
-        Je suis votre assistant expert en production pétrolière pour le champ <strong>EZZAOUIA</strong>.<br>
-        Je combine vos données SQL Server avec vos documents techniques pour des analyses précises.
+        I am your expert assistant for oil production in the <strong>EZZAOUIA</strong> field.<br>
+        I combine your SQL Server data with your technical documents for precise analysis.
       </div>
       <div class="suggestions-grid">
-        <button class="suggestion-btn" onclick="setQ(this.textContent)">Analyse la performance du champ EZZAOUIA</button>
-        <button class="suggestion-btn" onclick="setQ(this.textContent)">Quels sont les top 5 puits producteurs ?</button>
-        <button class="suggestion-btn" onclick="setQ(this.textContent)">Analyse le WCT et GOR du champ</button>
-        <button class="suggestion-btn" onclick="setQ(this.textContent)">Liste tous les puits actifs avec leur statut</button>
+        <button class="suggestion-btn" onclick="setQ(this.textContent)">Analyze EZZAOUIA field performance</button>
+        <button class="suggestion-btn" onclick="setQ(this.textContent)">What are the top 5 producing wells?</button>
+        <button class="suggestion-btn" onclick="setQ(this.textContent)">Analyze field WCT and GOR</button>
+        <button class="suggestion-btn" onclick="setQ(this.textContent)">List all active wells with their status</button>
       </div>
     </div>
     {% else %}
@@ -949,7 +1169,7 @@
       </div>
     </div>
     <div class="msg-row bot">
-      <div class="msg-avatar bot">IA</div>
+      <div class="msg-avatar bot">AI</div>
       <div class="msg-content">
         <div class="msg-bubble bot-answer">{{ msg.answer|safe }}</div>
         <div class="msg-meta">
@@ -959,9 +1179,29 @@
           {{ msg.duration }}s · {{ msg.created_at|date:"d/m/Y H:i" }}
         </div>
         <div class="msg-rating" data-message-id="{{ msg.id }}">
-          <span class="rating-label">Evaluation :</span>
-          <button class="rate-btn up {% if msg.is_satisfied == True %}active{% endif %}" onclick="rateMessage({{ msg.id }}, true, this)" title="Satisfait">&#128077;</button>
-          <button class="rate-btn down {% if msg.is_satisfied == False %}active{% endif %}" onclick="rateMessage({{ msg.id }}, false, this)" title="Insatisfait">&#128078;</button>
+          <span class="rating-label">Rating:</span>
+          <button class="rate-btn up {% if msg.is_satisfied == True %}active{% endif %}" onclick="rateMessage({{ msg.id }}, true, this)" title="Satisfied">&#128077;</button>
+          <button class="rate-btn down {% if msg.is_satisfied == False %}active{% endif %}" onclick="rateMessage({{ msg.id }}, false, this)" title="Unsatisfied">&#128078;</button>
+        </div>
+        <button class="comment-toggle-btn"
+                id="ctoggle-{{ msg.id }}"
+                onclick="toggleComments({{ msg.id }}, this)">
+          &#128172; Comments
+        </button>
+        <div class="comment-zone" id="czone-{{ msg.id }}">
+          <div class="comment-list" id="clist-{{ msg.id }}">
+            <div class="comment-empty">Loading…</div>
+          </div>
+          <div class="comment-form">
+            <textarea class="comment-textarea" id="ctxt-{{ msg.id }}" rows="2" placeholder="Your comment on this response..." maxlength="500"></textarea>
+            <div class="comment-form-row">
+              <label class="comment-visibility-toggle">
+                <input type="checkbox" id="cpub-{{ msg.id }}" checked>
+                Team-visible
+              </label>
+              <button class="btn-add-comment" onclick="submitComment({{ msg.id }})">Add</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -975,40 +1215,57 @@
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/>
         </svg>
-        Joindre des documents
+        Attach documents
       </button>
       <input type="file" id="fileInput" accept=".pdf,.docx,.xlsx" multiple onchange="uploadMultipleDocs(this)">
       <span class="upload-status" id="uploadStatus"></span>
       <div id="docFilterContainer"></div>
-      <button class="btn-clear-all" id="btnClearAll" style="display:none" onclick="clearAllDocs()">✕ Tout effacer</button>
+      <button class="btn-clear-all" id="btnClearAll" style="display:none" onclick="clearAllDocs()">✕ Clear all</button>
     </div>
  
     <div class="input-row">
-      <textarea id="qInput" placeholder="Posez votre question sur la production EZZAOUIA..."
+      <textarea id="qInput" placeholder="Ask your question about EZZAOUIA production..."
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendQ();}"></textarea>
-      <button class="btn-send" id="sendBtn" onclick="sendQ()" title="Envoyer">
+      <button class="btn-send" id="sendBtn" onclick="sendQ()" title="Send">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
         </svg>
       </button>
-      <button class="btn-stop" id="stopBtn" onclick="stopQ()" title="Arrêter">
+      <button class="btn-stop" id="stopBtn" onclick="stopQ()" title="Stop">
         <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
           <rect x="5" y="5" width="14" height="14" rx="2"/>
         </svg>
       </button>
     </div>
-    <div class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne · PDF/Word/Excel acceptés · Sélection multiple possible</div>
+    <div class="input-hint">Enter to send · Shift+Enter for a new line · PDF/Word/Excel accepted · Multiple selection supported</div>
   </div>
 </div>
  
 <!-- Delete confirmation modal -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal-box">
-    <h3>Supprimer la conversation ?</h3>
-    <p>Cette action est irréversible. Tous les messages seront perdus.</p>
+    <h3>Delete conversation?</h3>
+    <p>This action is irreversible. All messages will be lost.</p>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeDeleteModal()">Annuler</button>
-      <button class="btn-confirm-delete" id="btnConfirmDelete">Supprimer</button>
+      <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn-confirm-delete" id="btnConfirmDelete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div class="modal-overlay" id="shareModal">
+  <div class="modal-box" style="max-width:440px">
+    <h3>Share conversation</h3>
+    <p>Select colleagues to share this session with (read-only).</p>
+    <input type="text" class="user-search-input" id="userSearchInput"
+           placeholder="Search a user..." oninput="filterShareUsers(this.value)">
+    <div class="user-list" id="userList">
+      <div style="color:var(--text-dim);font-size:12px;padding:12px 0;text-align:center;">Loading…</div>
+    </div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn-cancel" onclick="closeShareModal()">Cancel</button>
+      <button class="btn-confirm-share" id="btnConfirmShare" onclick="confirmShare()">Share</button>
     </div>
   </div>
 </div>
@@ -1016,11 +1273,11 @@
 <!-- Session warning modal -->
 <div class="modal-overlay" id="sessionExpiryModal">
   <div class="modal-box">
-    <h3>Session presque expiree</h3>
-    <p>Votre session expire dans 5 minutes. Cliquez pour rester connecte.</p>
+    <h3>Session expiring soon</h3>
+    <p>Your session expires in 5 minutes. Click to stay signed in.</p>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeSessionExpiryModal()">Plus tard</button>
-      <button class="btn-stay-connected" id="btnStayConnected">Rester connecte</button>
+      <button class="btn-cancel" onclick="closeSessionExpiryModal()">Later</button>
+      <button class="btn-stay-connected" id="btnStayConnected">Stay signed in</button>
     </div>
   </div>
 </div>
@@ -1032,8 +1289,13 @@
   const stopBtn = document.getElementById('stopBtn');
   const SESSION_WARNING_DELAY_MS = 25 * 60 * 1000;
   let sessionWarningTimer = null;
-
   let abortController = null;
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   function showSessionExpiryModal() {
     const modal = document.getElementById('sessionExpiryModal');
@@ -1056,7 +1318,7 @@
 
     const oldLabel = btn.textContent;
     btn.disabled = true;
-    btn.textContent = 'Renouvellement...';
+    btn.textContent = 'Refreshing...';
 
     try {
       const resp = await fetch("{% url 'accounts:ping' %}", {
@@ -1098,9 +1360,9 @@
   }
 
   const SID_RAW = "{{ session_id_js }}";
-  let sessionId  = (SID_RAW === 'null' || SID_RAW === '') ? null : parseInt(SID_RAW);
-  let activeDocIds   = [];   // liste des doc_ids actifs
-  let activeDocNames = [];   // liste des noms de fichiers actifs
+  let sessionId  = (SID_RAW === 'null' || SID_RAW === 'None' || SID_RAW === '') ? null : parseInt(SID_RAW);
+  let activeDocIds   = [];   // active doc_ids
+  let activeDocNames = [];   // active filenames
   const PRESELECTED_DOCS = {{ preselected_docs_json|safe }};
  
   area.scrollTop = area.scrollHeight;
@@ -1147,8 +1409,8 @@
       if (!mount) return;
 
       const titleText = (data.period === 'afternoon')
-        ? "💡 Sujets de suivi de l'apres-midi"
-        : "💡 Sujets d'analyse recommandes aujourd'hui";
+        ? "💡 Afternoon follow-up topics"
+        : "💡 Recommended analysis topics today";
 
       const wrap = document.createElement('div');
       wrap.className = 'morning-suggestions-wrap';
@@ -1203,14 +1465,14 @@
       badge.title = name;
       badge.innerHTML =
         '<span class="doc-badge-name">' + label + '</span>' +
-        '<span class="doc-filter-remove" onclick="removeDoc(' + i + ')" title="Retirer">×</span>';
+        '<span class="doc-filter-remove" onclick="removeDoc(' + i + ')" title="Remove">×</span>';
       container.appendChild(badge);
     });
 
     if (activeDocIds.length > 1) {
       const tcm = document.createElement('div');
       tcm.className = 'doc-badge tcm';
-      tcm.innerHTML = '📁 TCM — ' + activeDocIds.length + ' fichiers actifs';
+      tcm.innerHTML = '📁 TCM — ' + activeDocIds.length + ' active files';
       container.appendChild(tcm);
     }
 
@@ -1244,13 +1506,13 @@
     const welcome = area.querySelector('.welcome-wrap');
     if (welcome) welcome.remove();
  
-    const initial = type === 'user' ? '{{ request.user.username|first|upper }}' : 'IA';
+    const initial = type === 'user' ? '{{ request.user.username|first|upper }}' : 'AI';
     const row = document.createElement('div');
     row.className = 'msg-row ' + type;
  
     if (type === 'bot' && html === '__thinking__') {
       row.innerHTML =
-        '<div class="msg-avatar bot">IA</div>' +
+        '<div class="msg-avatar bot">AI</div>' +
         '<div class="msg-content"><div class="thinking-dots"><span></span><span></span><span></span></div></div>';
     } else {
       row.innerHTML =
@@ -1269,9 +1531,24 @@
     const downActive = currentRating === false ? ' active' : '';
     return (
       '<div class="msg-rating" data-message-id="' + messageId + '">' +
-        '<span class="rating-label">Evaluation :</span>' +
-        '<button class="rate-btn up' + upActive + '" onclick="rateMessage(' + messageId + ', true, this)" title="Satisfait">&#128077;</button>' +
-        '<button class="rate-btn down' + downActive + '" onclick="rateMessage(' + messageId + ', false, this)" title="Insatisfait">&#128078;</button>' +
+        '<span class="rating-label">Rating:</span>' +
+        '<button class="rate-btn up' + upActive + '" onclick="rateMessage(' + messageId + ', true, this)" title="Satisfied">&#128077;</button>' +
+        '<button class="rate-btn down' + downActive + '" onclick="rateMessage(' + messageId + ', false, this)" title="Unsatisfied">&#128078;</button>' +
+      '</div>' +
+      '<button class="comment-toggle-btn" id="ctoggle-' + messageId + '" onclick="toggleComments(' + messageId + ', this)">&#128172; Comments</button>' +
+      '<div class="comment-zone" id="czone-' + messageId + '">' +
+        '<div class="comment-list" id="clist-' + messageId + '">' +
+          '<div class="comment-empty">Loading…</div>' +
+        '</div>' +
+        '<div class="comment-form">' +
+          '<textarea class="comment-textarea" id="ctxt-' + messageId + '" rows="2" placeholder="Your comment on this response..." maxlength="500"></textarea>' +
+          '<div class="comment-form-row">' +
+            '<label class="comment-visibility-toggle">' +
+              '<input type="checkbox" id="cpub-' + messageId + '" checked>Team-visible' +
+            '</label>' +
+            '<button class="btn-add-comment" onclick="submitComment(' + messageId + ')">Add</button>' +
+          '</div>' +
+        '</div>' +
       '</div>'
     );
   }
@@ -1288,7 +1565,7 @@
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
-        alert(data.error || 'Erreur notation.');
+        alert(data.error || 'Rating error.');
         return;
       }
 
@@ -1299,7 +1576,7 @@
       if (upBtn) upBtn.classList.toggle('active', rating === true);
       if (downBtn) downBtn.classList.toggle('active', rating === false);
     } catch (_) {
-      alert('Erreur de connexion pour la notation.');
+      alert('Error while submitting rating.');
     }
   }
  
@@ -1330,9 +1607,9 @@
       const data = await resp.json();
 
       if (data.stopped) {
-        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Génération arrêtée.</div>';
+        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Generation stopped.</div>';
       } else if (data.error) {
-        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Erreur : ' + data.error + '</div>';
+        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Error : ' + data.error + '</div>';
       } else {
         thinkingContent.innerHTML =
           '<div class="msg-bubble">' + renderMarkdown(data.answer) + '</div>' +
@@ -1344,17 +1621,54 @@
 
         if (data.chart_data) renderChart(thinkingContent, data.chart_data);
         if (data.suggestions && data.suggestions.length) renderSuggestions(thinkingContent, data.suggestions);
+        if (data.related_comments && data.related_comments.length) renderRelatedComments(thinkingContent, data.related_comments);
 
         if (!sessionId && data.session_id) {
           sessionId = data.session_id;
           window.history.replaceState(null, '', '/chatbot/session/' + data.session_id + '/');
+
+          // Insert the new session at the top of the sidebar list
+          const sessionsList = document.querySelector('.sessions-list');
+          if (sessionsList) {
+            const placeholder = document.getElementById('noConvMsg');
+            if (placeholder) placeholder.remove();
+
+            document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+
+            const trunc = q.length > 38 ? q.slice(0, 37) + '…' : q;
+            const newItem = document.createElement('a');
+            newItem.href      = '/chatbot/session/' + data.session_id + '/';
+            newItem.className = 'session-item active';
+            newItem.innerHTML =
+              '<div class="session-info">' +
+                '<div class="session-title" id="stitle-' + data.session_id + '">' + escHtml(trunc) + '</div>' +
+                '<div class="session-date">Just now</div>' +
+              '</div>' +
+              '<div class="session-actions">' +
+                '<button class="session-action-btn" title="Rename"' +
+                  ' onclick="event.preventDefault();event.stopPropagation();startRename(' + data.session_id + ',' + JSON.stringify(trunc) + ')">' +
+                  '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>' +
+                '</button>' +
+                '<button class="session-action-btn" title="Share"' +
+                  ' onclick="event.preventDefault();event.stopPropagation();shareSession(' + data.session_id + ')">' +
+                  '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>' +
+                '</button>' +
+                '<button class="session-action-btn delete" title="Delete"' +
+                  ' onclick="event.preventDefault();event.stopPropagation();confirmDelete(' + data.session_id + ')">' +
+                  '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>' +
+                '</button>' +
+              '</div>';
+
+            const sharedSection = document.getElementById('sharedWithMeSection');
+            sessionsList.insertBefore(newItem, sharedSection || sessionsList.firstChild);
+          }
         }
       }
     } catch (e) {
       if (e.name === 'AbortError') {
-        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Génération arrêtée.</div>';
+        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Generation stopped.</div>';
       } else {
-        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Erreur de connexion au serveur.</div>';
+        thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Server error.</div>';
       }
     }
 
@@ -1369,7 +1683,7 @@
 
     const status = document.getElementById('uploadStatus');
     status.style.color = 'var(--text-muted)';
-    status.textContent = `Indexation de ${files.length} fichier(s)...`;
+    status.textContent = `Indexing ${files.length} file(s)...`;
 
     let success = 0;
     let errors  = 0;
@@ -1388,7 +1702,7 @@
 
         if (data.error) {
           errors++;
-          console.error('Erreur fichier', file.name, data.error);
+          console.error('File error', file.name, data.error);
         } else {
           if (!activeDocIds.includes(data.doc_id)) {
             activeDocIds.push(data.doc_id);
@@ -1398,7 +1712,7 @@
         }
       } catch (e) {
         errors++;
-        console.error('Erreur upload', file.name, e);
+        console.error('Error upload', file.name, e);
       }
     }
 
@@ -1410,9 +1724,9 @@
     notif.innerHTML =
       '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
-      success + ' fichier(s) indexé(s) avec succès.' +
-      (errors > 0 ? ' ' + errors + ' erreur(s).' : '') +
-      ' Le chatbot interroge maintenant tous les documents actifs.';
+      success + ' file(s) indexed successfully.' +
+      (errors > 0 ? ' ' + errors + ' Error(s).' : '') +
+      ' The chatbot now queries all active documents.';
     document.getElementById('messagesArea').appendChild(notif);
     document.getElementById('messagesArea').scrollTop = 99999;
 
@@ -1425,7 +1739,7 @@
  
     const status = document.getElementById('uploadStatus');
     status.style.color = 'var(--text-muted)';
-    status.textContent = 'Indexation...';
+    status.textContent = 'Indexing...';
  
     const fd = new FormData();
     fd.append('file', file);
@@ -1440,7 +1754,7 @@
         status.textContent = data.error;
       } else {
         status.textContent = '';
-        // Ajouter à la liste active (pas de remplacement)
+        // Add to active list
         if (!activeDocIds.includes(data.doc_id)) {
           activeDocIds.push(data.doc_id);
           activeDocNames.push(data.filename);
@@ -1451,14 +1765,14 @@
         notif.innerHTML =
           '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
-          '"' + data.filename + '" indexé (' + data.chunks + ' segments). ' +
-          (activeDocIds.length > 1 ? activeDocIds.length + ' fichiers actifs.' : 'Filtre actif.');
+          '"' + data.filename + '" indexed (' + data.chunks + ' chunks). ' +
+          (activeDocIds.length > 1 ? activeDocIds.length + ' active files.' : 'Active filter.');
         area.appendChild(notif);
         area.scrollTop = area.scrollHeight;
       }
     } catch (e) {
       status.style.color = 'var(--red)';
-      status.textContent = 'Erreur upload.';
+      status.textContent = 'Error upload.';
     }
  
     el.value = '';
@@ -1555,10 +1869,10 @@
         closeDeleteModal();
         window.location.href = '{% url "chatbot:chat" %}';
       } else {
-        alert('Erreur : ' + (data.error || 'Échec de la suppression'));
+        alert('Error : ' + (data.error || 'Deletion failed'));
       }
     } catch (e) {
-      alert('Erreur de connexion.');
+      alert('Network error.');
     }
   });
  
@@ -1581,6 +1895,7 @@
 
   startSessionWarningTimer();
   loadMorningSuggestions();
+  loadSharedWithMe();
 
   /* ---- Chart rendering ---- */
   const _chartInstances = {};
@@ -1597,11 +1912,11 @@
     wrapper.className = 'chart-container';
     wrapper.innerHTML =
       '<div class="chart-header">' +
-        '<div class="chart-title">📊 Évolution · ' + chartData.well_code + (chartData.well_name ? ' — ' + chartData.well_name : '') + '</div>' +
+        '<div class="chart-title">📊 Trend · ' + chartData.well_code + (chartData.well_name ? ' — ' + chartData.well_name : '') + '</div>' +
         '<button class="btn-dl-chart" onclick="downloadChart(\'' + cid + '\',\'' + chartData.well_code + '\')">' +
           '<svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
             '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>' +
-          '</svg>Télécharger PDF' +
+          '</svg>Download PDF' +
         '</button>' +
       '</div>' +
       '<canvas id="' + cid + '" height="200"></canvas>';
@@ -1619,7 +1934,7 @@
         scales: {
           x:  { ticks: { color: txtClr, font: { size: 10 }, maxRotation: 45 }, grid: { color: gridClr } },
           y:  { type: 'linear', position: 'left',  ticks: { color: txtClr, font: { size: 10 } }, grid: { color: gridClr },
-                title: { display: true, text: 'Huile (STB)', color: '#C9A84C', font: { size: 11 } } },
+                title: { display: true, text: 'Oil (STB)', color: '#C9A84C', font: { size: 11 } } },
           y1: { type: 'linear', position: 'right', ticks: { color: txtClr, font: { size: 10 } }, grid: { drawOnChartArea: false },
                 title: { display: true, text: 'BSW (%)', color: '#E05555', font: { size: 11 } }, min: 0, max: 100 },
         },
@@ -1635,15 +1950,370 @@
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15);
     pdf.setTextColor(40, 40, 40);
-    pdf.text('Évolution Production — Puits ' + wellCode, 14, 18);
+    pdf.text('Production trend — Well ' + wellCode, 14, 18);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(110, 110, 110);
-    pdf.text('EZZAOUIA · MARETAP — ' + new Date().toLocaleDateString('fr-FR'), 14, 25);
+    pdf.text('EZZAOUIA · MARETAP — ' + new Date().toLocaleDateString('en-US'), 14, 25);
     const img = chart.toBase64Image('image/png', 1.0);
     pdf.addImage(img, 'PNG', 14, 32, 268, 150);
     pdf.save('production_' + wellCode + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
   }
+
+  /* ---- Share session ---- */
+  let _shareSessionId = null;
+  let _allShareUsers  = [];
+
+  async function shareSession(sessionId) {
+    _shareSessionId = sessionId;
+    document.getElementById('userSearchInput').value = '';
+    document.getElementById('userList').innerHTML =
+      '<div style="color:var(--text-dim);font-size:12px;padding:12px 0;text-align:center;">Loading…</div>';
+    document.getElementById('shareModal').classList.add('show');
+
+    try {
+      const resp = await fetch('/chatbot/users/');
+      const data = await resp.json();
+      _allShareUsers = data.users || [];
+      renderShareUserList(_allShareUsers);
+    } catch (_) {
+      document.getElementById('userList').innerHTML =
+        '<div style="color:var(--red);font-size:12px;padding:8px;text-align:center;">Loading error.</div>';
+    }
+  }
+
+  function renderShareUserList(users) {
+    const list = document.getElementById('userList');
+    if (!users.length) {
+      list.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center;">No users found.</div>';
+      return;
+    }
+    list.innerHTML = users.map(u =>
+      '<label class="user-item">' +
+        '<input type="checkbox" class="user-check" value="' + u.id + '">' +
+        '<div class="user-item-info">' +
+          '<div class="user-item-name">' + escHtml(u.full_name) + '</div>' +
+          '<div class="user-item-sub">@' + escHtml(u.username) + (u.role ? ' · ' + escHtml(u.role) : '') + '</div>' +
+        '</div>' +
+      '</label>'
+    ).join('');
+
+    list.querySelectorAll('.user-item').forEach(item => {
+      item.addEventListener('change', () => {
+        item.classList.toggle('selected', item.querySelector('input').checked);
+      });
+    });
+  }
+
+  function filterShareUsers(query) {
+    const q = query.toLowerCase();
+    const filtered = q
+      ? _allShareUsers.filter(u =>
+          u.full_name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q))
+      : _allShareUsers;
+    renderShareUserList(filtered);
+  }
+
+  async function confirmShare() {
+    const checks  = document.querySelectorAll('#userList .user-check:checked');
+    const userIds = Array.from(checks).map(c => parseInt(c.value));
+    if (!userIds.length) { alert('Select at least one user.'); return; }
+
+    const btn = document.getElementById('btnConfirmShare');
+    btn.disabled = true; btn.textContent = 'Sending...';
+
+    try {
+      const resp = await fetch('/chatbot/share/' + _shareSessionId + '/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({ user_ids: userIds }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { alert(data.error || 'Error.'); return; }
+      closeShareModal();
+      showToast('✓ Session shared with ' + data.shared_count + ' User(s)', 'green');
+    } catch (_) {
+      alert('Network error.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Share';
+    }
+  }
+
+  function closeShareModal() {
+    document.getElementById('shareModal').classList.remove('show');
+  }
+
+  document.getElementById('shareModal').addEventListener('click', function(e) {
+    if (e.target === this) closeShareModal();
+  });
+
+  function showToast(msg, color) {
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:11px 18px;background:var(--dark2);border:1px solid var(--' + color + ');border-radius:8px;color:var(--' + color + ');font-size:13px;z-index:2000;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  /* ---- Shared-with-me sidebar section ---- */
+  async function loadSharedWithMe() {
+    try {
+      const resp = await fetch('/chatbot/shared-with-me/');
+      const data = await resp.json();
+      const sessions = data.shared_sessions || [];
+      if (!sessions.length) return;
+
+      const section = document.getElementById('sharedWithMeSection');
+      const list    = document.getElementById('sharedWithMeList');
+      section.style.display = 'block';
+      list.innerHTML = sessions.map(s => {
+        const title = s.title.length > 35 ? s.title.slice(0, 34) + '…' : s.title;
+        return (
+          '<a href="/chatbot/shared/' + s.token + '/" class="session-item shared-item">' +
+            '<div class="session-info">' +
+              '<div class="session-title">' + escHtml(title) + '</div>' +
+              '<div class="session-date">De ' + escHtml(s.shared_by) + ' · ' + s.shared_at + '</div>' +
+            '</div>' +
+          '</a>'
+        );
+      }).join('');
+    } catch (_) {}
+  }
+
+  /* ---- Add new session to sidebar after creation ---- */
+  function addNewSessionToSidebar(sessionId, title) {
+    const list = document.querySelector('.sessions-list');
+    if (!list) return;
+
+    // Remove "No conversations" placeholder
+    const placeholder = document.getElementById('noConvMsg');
+    if (placeholder) placeholder.remove();
+
+    // Remove active from other items
+    list.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+
+    const trunc = title.length > 38 ? title.slice(0, 37) + '…' : title;
+    const now   = new Date();
+    const dateStr = now.toLocaleDateString('en-US') + ' at '
+      + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+
+    const link = document.createElement('a');
+    link.href      = '/chatbot/session/' + sessionId + '/';
+    link.className = 'session-item active';
+    link.innerHTML =
+      '<div class="session-info">' +
+        '<div class="session-title" id="stitle-' + sessionId + '">' + escHtml(trunc) + '</div>' +
+        '<div class="session-date">' + dateStr + '</div>' +
+      '</div>' +
+      '<div class="session-actions">' +
+        '<button class="session-action-btn" title="Rename"' +
+          ' onclick="event.preventDefault();event.stopPropagation();startRename(' + sessionId + ',' + JSON.stringify(trunc) + ')">' +
+          '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>' +
+        '</button>' +
+        '<button class="session-action-btn" title="Share"' +
+          ' onclick="event.preventDefault();event.stopPropagation();shareSession(' + sessionId + ')">' +
+          '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>' +
+        '</button>' +
+        '<button class="session-action-btn delete" title="Delete"' +
+          ' onclick="event.preventDefault();event.stopPropagation();confirmDelete(' + sessionId + ')">' +
+          '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>' +
+        '</button>' +
+      '</div>';
+
+    // Insert before sharedWithMeSection or at start
+    const sharedSection = document.getElementById('sharedWithMeSection');
+    list.insertBefore(link, sharedSection || list.firstChild);
+  }
+
+  /* ---- Related comments (Option D) ---- */
+  function renderRelatedComments(container, items) {
+    if (!items || !items.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'related-comments-section';
+    wrap.innerHTML =
+      '<div class="related-comments-title">' +
+        '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>' +
+        '</svg>' +
+        'Team comments on similar questions' +
+      '</div>' +
+      items.map(item =>
+        '<div class="related-comment-block">' +
+          '<div class="related-comment-q">&#8220;' + escHtml(item.question) + '&#8221;</div>' +
+          item.comments.map(c =>
+            '<div class="related-comment-entry">' +
+              '<span class="related-comment-author">' + escHtml(c.author) + ' : </span>' +
+              escHtml(c.content) +
+            '</div>'
+          ).join('') +
+        '</div>'
+      ).join('');
+    container.appendChild(wrap);
+  }
+
+  /* ---- Comments ---- */
+  const _commentsLoaded = new Set();
+  const COMMENTS_OPEN_STORAGE_PREFIX = 'chatbot:open-comments:';
+
+  function commentsStorageKey() {
+    const sid = Number.isFinite(sessionId) ? sessionId : 'new';
+    return COMMENTS_OPEN_STORAGE_PREFIX + sid;
+  }
+
+  function readOpenCommentIds() {
+    try {
+      const raw = localStorage.getItem(commentsStorageKey());
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return new Set();
+      return new Set(arr.map(v => parseInt(v, 10)).filter(Number.isInteger));
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  function writeOpenCommentIds(idsSet) {
+    try {
+      const arr = Array.from(idsSet).map(v => parseInt(v, 10)).filter(Number.isInteger);
+      localStorage.setItem(commentsStorageKey(), JSON.stringify(arr));
+    } catch (_) {}
+  }
+
+  function saveCommentZoneState(messageId, isOpen) {
+    const id = parseInt(messageId, 10);
+    if (!Number.isInteger(id)) return;
+    const openIds = readOpenCommentIds();
+    if (isOpen) openIds.add(id);
+    else openIds.delete(id);
+    writeOpenCommentIds(openIds);
+  }
+
+  function wasCommentZoneOpen(messageId) {
+    const id = parseInt(messageId, 10);
+    if (!Number.isInteger(id)) return false;
+    return readOpenCommentIds().has(id);
+  }
+
+  function listRenderedMessageIds() {
+    return Array.from(document.querySelectorAll('.comment-toggle-btn[id^="ctoggle-"]'))
+      .map(btn => parseInt((btn.id || '').replace('ctoggle-', ''), 10))
+      .filter(Number.isInteger);
+  }
+
+  function toggleComments(messageId, btn) {
+    const id = parseInt(messageId, 10);
+    if (!Number.isInteger(id)) return;
+    const zone = document.getElementById('czone-' + messageId);
+    if (!zone) return;
+    const isOpen = zone.classList.toggle('open');
+    saveCommentZoneState(id, isOpen);
+    if (isOpen && !_commentsLoaded.has(id)) {
+      loadComments(id);
+    }
+  }
+
+  async function loadComments(messageId, options) {
+    const id = parseInt(messageId, 10);
+    if (!Number.isInteger(id)) return;
+    const forceOpen = Boolean(options && options.forceOpen);
+    const list = document.getElementById('clist-' + messageId);
+    if (!list) return;
+    try {
+      const resp = await fetch('/chatbot/comments/' + messageId + '/', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (!resp.ok) throw new Error('comments-load-failed');
+      const data = await resp.json();
+      _commentsLoaded.add(id);
+      renderCommentList(id, data.comments || []);
+      updateCommentToggleLabel(id, (data.comments || []).length);
+      if (forceOpen) {
+        const zone = document.getElementById('czone-' + id);
+        if (zone) zone.classList.add('open');
+      }
+    } catch (_) {
+      if (list) list.innerHTML = '<div class="comment-empty">Loading error.</div>';
+    }
+  }
+
+  function renderCommentList(messageId, comments) {
+    const list = document.getElementById('clist-' + messageId);
+    if (!list) return;
+    if (!comments.length) {
+      list.innerHTML = '<div class="comment-empty">No comments yet.</div>';
+      return;
+    }
+    list.innerHTML = comments.map(c =>
+      '<div class="comment-item">' +
+        '<div class="comment-item-header">' +
+          '<span class="comment-author">' + escHtml(c.author) + '</span>' +
+          '<span class="comment-date">' + c.created_at + '</span>' +
+          (!c.is_public ? '<span class="comment-private-icon" title="Private comment">&#128274;</span>' : '') +
+        '</div>' +
+        '<div class="comment-text">' + escHtml(c.content) + '</div>' +
+      '</div>'
+    ).join('');
+  }
+
+  function updateCommentToggleLabel(messageId, count) {
+    const btn = document.getElementById('ctoggle-' + messageId);
+    if (!btn) return;
+    btn.innerHTML = '&#128172; Comments' + (count > 0 ? ' (' + count + ')' : '');
+    btn.classList.toggle('has-comments', count > 0);
+  }
+
+  async function submitComment(messageId) {
+    const id = parseInt(messageId, 10);
+    if (!Number.isInteger(id)) return;
+    const textarea = document.getElementById('ctxt-' + messageId);
+    const pubCheck = document.getElementById('cpub-' + messageId);
+    if (!textarea) return;
+
+    const content = textarea.value.trim();
+    if (!content) { textarea.focus(); return; }
+
+    const btn = textarea.closest('.comment-zone').querySelector('.btn-add-comment');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+    try {
+      const resp = await fetch('/chatbot/add-comment/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}',
+        },
+        body: JSON.stringify({
+          message_id: messageId,
+          content:    content,
+          is_public:  pubCheck ? pubCheck.checked : true,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        alert(data.error || 'Error while adding comment.');
+        return;
+      }
+
+      textarea.value = '';
+      _commentsLoaded.delete(id);
+      await loadComments(id, { forceOpen: true });
+      saveCommentZoneState(id, true);
+    } catch (_) {
+      alert('Network error.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    }
+  }
+
+  async function hydrateCommentsOnLoad() {
+    const messageIds = listRenderedMessageIds();
+    if (!messageIds.length) return;
+    await Promise.all(
+      messageIds.map(id => loadComments(id, { forceOpen: wasCommentZoneOpen(id) }))
+    );
+  }
+
+  hydrateCommentsOnLoad();
 
   /* ---- Suggestions rendering ---- */
   function renderSuggestions(container, suggestions) {
@@ -1657,7 +2327,7 @@
       '<div class="suggestions-label">' +
         '<svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>' +
-        '</svg>Questions suggérées' +
+        '</svg>Suggested questions' +
       '</div>' +
       '<div class="suggestions-chips">' + chips + '</div>';
     container.appendChild(sec);
@@ -1666,3 +2336,6 @@
 <script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>
+
+
+

@@ -22,7 +22,7 @@ def _parse_iso_date(raw_value):
 @login_required
 def audit_log_list(request):
     if getattr(request.user, "role", None) not in {"admin", "direction"}:
-        messages.error(request, "Acces non autorise.")
+        messages.error(request, "Unauthorized access.")
         return redirect("dashboard:home")
 
     user_filter = request.GET.get("user", "").strip()
@@ -44,13 +44,13 @@ def audit_log_list(request):
         if start_date_raw and start_date:
             logs = logs.filter(created_at__date__gte=start_date)
         elif start_date_raw:
-            messages.warning(request, "Date de debut invalide.")
+            messages.warning(request, "Invalid start date.")
 
         end_date = _parse_iso_date(end_date_raw)
         if end_date_raw and end_date:
             logs = logs.filter(created_at__date__lte=end_date)
         elif end_date_raw:
-            messages.warning(request, "Date de fin invalide.")
+            messages.warning(request, "Invalid end date.")
 
         paginator = Paginator(logs, 20)
         page_obj = paginator.get_page(request.GET.get("page"))
@@ -63,7 +63,7 @@ def audit_log_list(request):
     except (ProgrammingError, OperationalError):
         messages.error(
             request,
-            "Table audit absente. Lancez 'python manage.py migrate audit' puis rechargez la page.",
+            "Audit table is missing. Run 'python manage.py migrate audit' and reload the page.",
         )
         users_with_logs = get_user_model().objects.none()
         page_obj = Paginator([], 20).get_page(1)

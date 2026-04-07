@@ -1,6 +1,6 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
@@ -486,16 +486,16 @@
         <div class="logo-name">EZZ<span>AOUIA</span></div>
       </div>
     </div>
-    <div class="logo-tagline">Plateforme de Production Intelligente</div>
+    <div class="logo-tagline">Smart Production Platform</div>
   </div>
 
   <nav class="sidebar-nav">
-    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-section">Dashboard</div>
     <a href="{% url 'dashboard:home' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
       </svg>
-      Vue d'ensemble
+      Overview
     </a>
 
     <div class="nav-section">Modules</div>
@@ -503,13 +503,13 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
       </svg>
-      Assistant IA
+      AI Assistant
     </a>
     <a href="{% url 'audit:log' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/>
       </svg>
-      Journal d'audit
+      Audit log
     </a>
 
     <div class="nav-section">Administration</div>
@@ -517,7 +517,7 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
       </svg>
-      Stats chatbot
+      Chatbot stats
       <span class="nav-badge">Admin</span>
     </a>
   </nav>
@@ -534,7 +534,7 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
       </svg>
-      Deconnexion
+      DeLogin
     </a>
   </div>
 </div>
@@ -542,17 +542,17 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-left">
-      <div class="page-title">Statistiques d'utilisation Chatbot</div>
+      <div class="page-title">Chatbot usage statistics</div>
       <div class="breadcrumb">
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
         </svg>
-        <span>Analytique admin - 30 derniers jours</span>
+        <span>Admin analytics - last 30 days</span>
       </div>
     </div>
     <div class="topbar-right">
       <div class="topbar-date" id="currentDate"></div>
-      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light mode">
         <svg class="icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
@@ -564,41 +564,41 @@
   </div>
 
   <div class="content">
-    <div class="section-label">KPIs Principaux</div>
+    <div class="section-label">Main KPIs</div>
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-title">Questions aujourd'hui</div>
+        <div class="kpi-title">Questions today</div>
         <div class="kpi-value">{{ questions_today }}</div>
-        <div class="kpi-sub">Messages chatbot sur la journee</div>
+        <div class="kpi-sub">Chatbot messages today</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Cette semaine</div>
+        <div class="kpi-title">This week</div>
         <div class="kpi-value">{{ questions_week }}</div>
-        <div class="kpi-sub">Derniers 7 jours</div>
+        <div class="kpi-sub">Last 7 days</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Temps moyen</div>
+        <div class="kpi-title">Average time</div>
         <div class="kpi-value">{{ avg_duration|floatformat:2 }}s</div>
-        <div class="kpi-sub">Moyenne 30 jours</div>
+        <div class="kpi-sub">30-day average</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Taux satisfaction</div>
+        <div class="kpi-title">Satisfaction rate</div>
         <div class="kpi-value">{{ satisfaction_rate|floatformat:1 }}%</div>
-        <div class="kpi-sub">Sur {{ evaluated_count }} reponses evaluees</div>
+        <div class="kpi-sub">Across {{ evaluated_count }} rated responses</div>
       </div>
     </div>
 
     <div class="meta-row">
       <div class="meta-pill">
-        <span>Questions (30 jours)</span>
+        <span>Questions (30 days)</span>
         <strong>{{ questions_month }}</strong>
       </div>
       <div class="meta-pill">
-        <span>Temps max (30 jours)</span>
+        <span>Max time (30 days)</span>
         <strong>{{ max_duration|floatformat:2 }}s</strong>
       </div>
       <div class="meta-pill">
-        <span>Reponses "hors perimetre"</span>
+        <span>"Out-of-scope" responses</span>
         <strong>{{ unanswered }}</strong>
       </div>
     </div>
@@ -607,8 +607,8 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Questions par jour</div>
-            <div class="card-sub">Evolution sur 30 jours</div>
+            <div class="card-title">Questions per day</div>
+            <div class="card-sub">30-day trend</div>
           </div>
         </div>
         <div class="card-body">
@@ -619,8 +619,8 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Heures de pointe</div>
-            <div class="card-sub">Distribution des questions par heure</div>
+            <div class="card-title">Peak hours</div>
+            <div class="card-sub">Question distribution by hour</div>
           </div>
         </div>
         <div class="card-body">
@@ -632,13 +632,13 @@
     <div class="cards-grid">
       <div class="card">
         <div class="card-header">
-          <div class="card-title">Top 5 utilisateurs</div>
+          <div class="card-title">Top 5 Users</div>
         </div>
         <div class="card-body" style="padding:0;">
           <table>
             <thead>
               <tr>
-                <th>Utilisateur</th>
+                <th>User</th>
                 <th>Login</th>
                 <th>Total questions</th>
               </tr>
@@ -651,7 +651,7 @@
                   <td>{{ row.total }}</td>
                 </tr>
               {% empty %}
-                <tr><td colspan="3" class="empty">Aucune donnee disponible.</td></tr>
+                 <tr><td colspan="3" class="empty">No data available.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -660,16 +660,16 @@
 
       <div class="card">
         <div class="card-header">
-          <div class="card-title">10 dernieres questions insatisfaisantes</div>
+          <div class="card-title">10 latest unsatisfactory questions</div>
         </div>
         <div class="card-body" style="padding:0;">
           <table>
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Utilisateur</th>
+                <th>User</th>
                 <th>Question</th>
-                <th>Etat</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -678,10 +678,10 @@
                   <td class="muted">{{ msg.created_at|date:"d/m H:i" }}</td>
                   <td>{{ msg.session.user.get_full_name|default:msg.session.user.username }}</td>
                   <td>{{ msg.question|truncatechars:90 }}</td>
-                  <td><span class="score-badge">Insatisfait</span></td>
+                  <td><span class="score-badge">Unsatisfied</span></td>
                 </tr>
               {% empty %}
-                <tr><td colspan="4" class="empty">Aucune question marquee comme insatisfaisante.</td></tr>
+                <tr><td colspan="4" class="empty">No question marked as unsatisfactory.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -693,7 +693,7 @@
 
 <script>
   document.getElementById('currentDate').textContent =
-    new Date().toLocaleDateString('fr-FR', {
+    new Date().toLocaleDateString('en-US', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
 
@@ -757,3 +757,5 @@
 <script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>
+
+

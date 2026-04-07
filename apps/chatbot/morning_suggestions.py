@@ -11,11 +11,11 @@ PRIORITY_ORDER = {"critical": 0, "attention": 1, "normal": 2}
 PRIORITY_ICON = {"critical": "🔴", "attention": "🟡", "normal": "🟢"}
 
 GENERIC_FOLLOW_UPS = [
-    "Comparer la performance des 5 puits les plus producteurs sur 7 jours",
-    "Verifier l'evolution du BSW moyen du champ cette semaine",
-    "Analyser les puits avec la plus forte variabilite de production",
-    "Controler l'ecart entre production realisee et objectif hebdomadaire",
-    "Examiner la tendance GOR des puits actifs",
+    "Compare the performance of the top 5 producing wells over 7 days",
+    "Check the field average BSW trend for this week",
+    "Analyze wells with the highest production variability",
+    "Track the gap between actual production and weekly target",
+    "Review the GOR trend of active wells",
 ]
 
 
@@ -109,7 +109,7 @@ def generate_morning_suggestions():
                 priority = "critical" if drop_pct >= 20 else "attention"
                 suggestions.append(
                     _make_item(
-                        f"Analyser {code} : production en baisse de {drop_pct:.0f}% cette semaine",
+                        f"Analyze {code}: production is down by {drop_pct:.0f}% this week",
                         priority,
                     )
                 )
@@ -118,7 +118,7 @@ def generate_morning_suggestions():
             priority = "critical" if current_bsw >= 80 else "attention"
             suggestions.append(
                 _make_item(
-                    f"Verifier water cut {code} : BSW a {current_bsw:.0f}%, risque reservoir",
+                    f"Check water cut for {code}: BSW is {current_bsw:.0f}%, reservoir risk",
                     priority,
                 )
             )
@@ -128,7 +128,7 @@ def generate_morning_suggestions():
             priority = "critical" if factor >= 2.5 else "attention"
             suggestions.append(
                 _make_item(
-                    f"GOR anormal sur {code} : {factor:.1f}x la normale, venues de gaz parasites ?",
+                    f"Abnormal GOR on {code}: {factor:.1f}x above normal, possible gas channeling?",
                     priority,
                 )
             )
@@ -142,21 +142,21 @@ def generate_morning_suggestions():
             if gap_pct <= -10:
                 suggestions.append(
                     _make_item(
-                        f"Production globale sous objectif : {abs(gap_pct):.0f}% d'ecart negatif cette semaine",
+                        f"Field production below target: {abs(gap_pct):.0f}% negative gap this week",
                         "critical",
                     )
                 )
             elif gap_pct <= -3:
                 suggestions.append(
                     _make_item(
-                        f"Production globale en dessous de l'objectif : {abs(gap_pct):.0f}% a corriger",
+                        f"Field production below target: {abs(gap_pct):.0f}% requires correction",
                         "attention",
                     )
                 )
             elif gap_pct >= 10:
                 suggestions.append(
                     _make_item(
-                        f"Production globale au-dessus de l'objectif : +{gap_pct:.0f}% cette semaine",
+                        f"Field production above target: +{gap_pct:.0f}% this week",
                         "normal",
                     )
                 )

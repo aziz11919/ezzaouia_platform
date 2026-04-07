@@ -1,11 +1,11 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EZZAOUIA - Journal d'audit</title>
+  <title>EZZAOUIA - Audit log</title>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -552,18 +552,18 @@
         <div class="logo-name">EZZ<span>AOUIA</span></div>
       </div>
     </div>
-    <div class="logo-tagline">Plateforme de Production Intelligente</div>
+    <div class="logo-tagline">Smart Production Platform</div>
   </div>
 
   <nav class="sidebar-nav">
-    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-section">Dashboard</div>
 
     <a href="{% url 'dashboard:home' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
       </svg>
-      Vue d'ensemble
-      <span class="nav-badge">Accueil</span>
+      Overview
+      <span class="nav-badge">Home</span>
     </a>
 
     <div class="nav-section">Modules</div>
@@ -572,14 +572,14 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
       </svg>
-      Assistant IA
+      AI Assistant
     </a>
 
     <a href="{% url 'ingestion:upload' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
       </svg>
-      Import fichiers
+      File Import
     </a>
 
     <a href="{% url 'ingestion:list' %}" class="nav-item">
@@ -596,7 +596,7 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/>
       </svg>
-      Journal d'audit
+      Audit log
       <span class="nav-badge">Audit</span>
     </a>
 
@@ -605,7 +605,7 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
       </svg>
-      Gestion utilisateurs
+      User Management
       <span class="nav-badge">Admin</span>
     </a>
     {% endif %}
@@ -626,7 +626,7 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
       </svg>
-      Deconnexion
+      DeLogin
     </a>
   </div>
 </div>
@@ -634,17 +634,17 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-left">
-      <div class="page-title">Journal d'audit</div>
+      <div class="page-title">Audit log</div>
       <div class="breadcrumb">
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
         </svg>
-        <span>Traçabilite des actions utilisateurs</span>
+        <span>User action traceability</span>
       </div>
     </div>
     <div class="topbar-right">
       <div class="topbar-date" id="currentDate"></div>
-      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light mode">
         <svg class="icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
@@ -656,7 +656,7 @@
   </div>
 
   <div class="content">
-    <div class="section-label">Filtres</div>
+    <div class="section-label">Filters</div>
 
     {% if messages %}
       <div class="alerts">
@@ -669,9 +669,9 @@
     <form method="get" class="filters-card">
       <div class="filters-grid">
         <div>
-          <label class="field-label" for="user">Utilisateur</label>
+          <label class="field-label" for="user">User</label>
           <select id="user" name="user" class="field-input">
-            <option value="">Tous</option>
+            <option value="">All</option>
             {% for u in users %}
               <option value="{{ u.id }}" {% if user_filter == u.id|stringformat:"s" %}selected{% endif %}>
                 {{ u.get_full_name|default:u.username }}
@@ -681,9 +681,9 @@
         </div>
 
         <div>
-          <label class="field-label" for="action">Type action</label>
+          <label class="field-label" for="action">Action type</label>
           <select id="action" name="action" class="field-input">
-            <option value="">Toutes</option>
+            <option value="">All</option>
             {% for value, label in actions %}
               <option value="{{ value }}" {% if action_filter == value %}selected{% endif %}>{{ value }}</option>
             {% endfor %}
@@ -691,35 +691,35 @@
         </div>
 
         <div>
-          <label class="field-label" for="start_date">Date debut</label>
+          <label class="field-label" for="start_date">Start date</label>
           <input type="date" id="start_date" name="start_date" value="{{ start_date }}" class="field-input">
         </div>
 
         <div>
-          <label class="field-label" for="end_date">Date fin</label>
+          <label class="field-label" for="end_date">End date</label>
           <input type="date" id="end_date" name="end_date" value="{{ end_date }}" class="field-input">
         </div>
 
         <div class="filter-actions">
-          <button type="submit" class="btn btn-primary">Filtrer</button>
-          <a href="{% url 'audit:log' %}" class="btn btn-ghost">Reinitialiser</a>
+          <button type="submit" class="btn btn-primary">Filter</button>
+          <a href="{% url 'audit:log' %}" class="btn btn-ghost">Reset</a>
         </div>
       </div>
     </form>
 
-    <div class="section-label">Historique</div>
+    <div class="section-label">History</div>
 
     <div class="table-card">
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Date/heure</th>
-              <th>Utilisateur</th>
+              <th>Date/time</th>
+              <th>User</th>
               <th>Action</th>
               <th>Details</th>
               <th>IP</th>
-              <th>Duree</th>
+              <th>Duration</th>
             </tr>
           </thead>
           <tbody>
@@ -730,7 +730,7 @@
                   {% if log.user %}
                     {{ log.user.get_full_name|default:log.user.username }}
                   {% else %}
-                    <span class="muted">Anonyme</span>
+                    <span class="muted">Anonymous</span>
                   {% endif %}
                 </td>
                 <td>
@@ -754,7 +754,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6" class="empty-row">Aucun log disponible pour le moment.</td>
+                <td colspan="6" class="empty-row">No logs available at the moment.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -765,10 +765,10 @@
         <div>Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</div>
         <div class="pagination-links">
           {% if page_obj.has_previous %}
-            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Precedent</a>
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
           {% endif %}
           {% if page_obj.has_next %}
-            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Suivant</a>
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
           {% endif %}
         </div>
       </div>
@@ -778,10 +778,11 @@
 
 <script>
   document.getElementById('currentDate').textContent =
-    new Date().toLocaleDateString('fr-FR', {
+    new Date().toLocaleDateString('en-US', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
 </script>
 <script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>
+

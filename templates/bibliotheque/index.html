@@ -1,11 +1,11 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bibliothèque — EZZAOUIA</title>
+  <title>Library — EZZAOUIA</title>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -159,38 +159,38 @@
   <div class="sidebar-logo">
     <div class="logo-company">MARETAP</div>
     <div class="logo-name">EZZAOUIA</div>
-    <div class="logo-sub">Champ pétrolier · Zarzis</div>
+    <div class="logo-sub">Oil field · Zarzis</div>
   </div>
 
   <nav class="sidebar-nav">
-    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-section">Dashboard</div>
     <a href="{% url 'dashboard:home' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-      Vue d'ensemble
+      Overview
     </a>
     <div class="nav-section">Modules</div>
     <a href="{% url 'chatbot:new' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/></svg>
-      Assistant IA
+      AI Assistant
     </a>
     <a href="{% url 'ingestion:upload' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-      Import fichiers
+      File Import
     </a>
     <a href="{% url 'bibliotheque:index' %}" class="nav-item active">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-      Bibliothèque
+      Library
     </a>
     {% if user.is_admin or user.is_direction %}
     <div class="nav-section">Administration</div>
     <a href="{% url 'audit:log' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
-      Journal d'audit
+      Audit log
     </a>
     {% if user.is_admin %}
     <a href="{% url 'accounts:user_list' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
-      Utilisateurs
+      Users
     </a>
     {% endif %}
     {% endif %}
@@ -211,17 +211,17 @@
   <!-- Topbar -->
   <div class="topbar">
     <div>
-      <div class="topbar-title">Bibliothèque de documents</div>
-      <div class="topbar-sub">{{ stats.total }} document{{ stats.total|pluralize }} indexé{{ stats.total|pluralize }}</div>
+      <div class="topbar-title">Document library</div>
+      <div class="topbar-sub">{{ stats.total }} document{{ stats.total|pluralize }} indexed</div>
     </div>
     <div class="topbar-actions">
       <a href="{% url 'ingestion:upload' %}" class="btn btn-primary">
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Importer
+        Import
       </a>
       <a href="{% url 'chatbot:new' %}" class="btn btn-ghost">
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/></svg>
-        Assistant IA
+        AI Assistant
       </a>
     </div>
   </div>
@@ -234,23 +234,23 @@
         <div class="stat-icon total">
           <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
         </div>
-        <div><div class="stat-num">{{ stats.total }}</div><div class="stat-label">Total indexés</div></div>
+        <div><div class="stat-num">{{ stats.total }}</div><div class="stat-label">Total indexed</div></div>
       </div>
       <div class="stat-card">
         <div class="stat-icon pdf">PDF</div>
-        <div><div class="stat-num">{{ stats.pdf }}</div><div class="stat-label">Rapports PDF</div></div>
+        <div><div class="stat-num">{{ stats.pdf }}</div><div class="stat-label">PDF reports</div></div>
       </div>
       <div class="stat-card">
         <div class="stat-icon docx">DOC</div>
-        <div><div class="stat-num">{{ stats.docx }}</div><div class="stat-label">Documents Word</div></div>
+        <div><div class="stat-num">{{ stats.docx }}</div><div class="stat-label">Word documents</div></div>
       </div>
       <div class="stat-card">
         <div class="stat-icon xlsx">XLS</div>
-        <div><div class="stat-num">{{ stats.xlsx }}</div><div class="stat-label">Fichiers Excel</div></div>
+        <div><div class="stat-num">{{ stats.xlsx }}</div><div class="stat-label">Excel files</div></div>
       </div>
       <div class="stat-card">
         <div class="stat-icon size">#</div>
-        <div><div class="stat-num">{{ stats.total_size_human }}</div><div class="stat-label">Taille totale</div></div>
+        <div><div class="stat-num">{{ stats.total_size_human }}</div><div class="stat-label">Total size</div></div>
       </div>
     </div>
 
@@ -261,19 +261,19 @@
       <aside class="sidebar-filters">
         <form method="get" action="">
           <div class="filter-card">
-            <div class="filter-title">Recherche</div>
+            <div class="filter-title">Search</div>
             <div class="filter-group">
-              <input type="text" name="q" class="filter-input" placeholder="Nom du fichier…" value="{{ search }}">
+              <input type="text" name="q" class="filter-input" placeholder="File name..." value="{{ search }}">
             </div>
           </div>
 
           <div class="filter-card">
-            <div class="filter-title">Filtres</div>
+            <div class="filter-title">Filters</div>
 
             <div class="filter-group">
-              <label class="filter-label">Type de fichier</label>
+              <label class="filter-label">File type</label>
               <select name="type" class="filter-select">
-                <option value="">Tous les types</option>
+                <option value="">All types</option>
                 <option value="pdf"  {% if filter_type == 'pdf'  %}selected{% endif %}>PDF</option>
                 <option value="docx" {% if filter_type == 'docx' %}selected{% endif %}>Word (DOCX)</option>
                 <option value="xlsx" {% if filter_type == 'xlsx' %}selected{% endif %}>Excel (XLSX)</option>
@@ -281,9 +281,9 @@
             </div>
 
             <div class="filter-group">
-              <label class="filter-label">Année d'import</label>
+              <label class="filter-label">Import year</label>
               <select name="year" class="filter-select">
-                <option value="">Toutes les années</option>
+                <option value="">All years</option>
                 {% for y in available_years %}
                 <option value="{{ y }}" {% if filter_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                 {% endfor %}
@@ -291,17 +291,17 @@
             </div>
 
             <div class="filter-group">
-              <label class="filter-label">Puits associé</label>
+              <label class="filter-label">Associated well</label>
               <select name="well" class="filter-select">
-                <option value="">Tous les puits</option>
+                <option value="">All wells</option>
                 {% for w in wells %}
                 <option value="{{ w }}" {% if filter_well == w %}selected{% endif %}>{{ w }}</option>
                 {% endfor %}
               </select>
             </div>
 
-            <button type="submit" class="filter-btn">Appliquer</button>
-            <a href="{% url 'bibliotheque:index' %}" class="filter-reset">Réinitialiser</a>
+            <button type="submit" class="filter-btn">Apply</button>
+            <a href="{% url 'bibliotheque:index' %}" class="filter-reset">Reset</a>
           </div>
         </form>
       </aside>
@@ -316,13 +316,13 @@
           {% if filter_well %}<input type="hidden" name="well" value="{{ filter_well }}">{% endif %}
           <div class="search-wrap">
             <svg class="search-icon" width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input type="text" name="q" class="search-input" placeholder="Rechercher un document…" value="{{ search }}">
+            <input type="text" name="q" class="search-input" placeholder="Search a document..." value="{{ search }}">
           </div>
         </form>
 
         <div class="results-info">
           {% if page_obj.paginator.count == 0 %}
-            Aucun document trouvé
+            No document found
           {% else %}
             {{ page_obj.paginator.count }} document{{ page_obj.paginator.count|pluralize }} — page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
           {% endif %}
@@ -340,24 +340,24 @@
                   {{ doc.created_at|date:"d/m/Y" }}
                   {% if doc.uploaded_by %} · {{ doc.uploaded_by.username }}{% endif %}
                 </div>
-                <div class="doc-size">Taille: {{ doc.file_size_human }}</div>
+                <div class="doc-size">Size: {{ doc.file_size_human }}</div>
               </div>
             </div>
 
             <span class="doc-badge badge-success">
               <svg width="8" height="8" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
-              Indexé
+              Indexed
             </span>
 
             <div class="doc-actions">
               <a href="{% url 'chatbot:chat' %}?doc_id={{ doc.pk }}" class="doc-btn doc-btn-chat">
                 <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/></svg>
-                Interroger
+                Ask
               </a>
               {% if doc.can_delete %}
               <button class="doc-btn doc-btn-del" onclick="confirmDelete({{ doc.pk }}, '{{ doc.original_name|escapejs }}')">
                 <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                Supprimer
+                Delete
               </button>
               {% endif %}
             </div>
@@ -387,17 +387,17 @@
         {% else %}
         <div class="empty-state">
           <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-          <div class="empty-title">Aucun document trouvé</div>
-          <div class="empty-sub">Modifiez vos filtres ou <a href="{% url 'ingestion:upload' %}" style="color:var(--gold)">importez un document</a></div>
+          <div class="empty-title">No document found</div>
+          <div class="empty-sub">Adjust your filters or <a href="{% url 'ingestion:upload' %}" style="color:var(--gold)">import a document</a></div>
         </div>
         {% endif %}
 
         <div class="bottom-summary">
-          <div class="summary-item">Documents indexes<strong>{{ stats.total }}</strong></div>
+          <div class="summary-item">Indexed documents<strong>{{ stats.total }}</strong></div>
           <div class="summary-item">PDF<strong>{{ stats.pdf }}</strong></div>
           <div class="summary-item">DOCX<strong>{{ stats.docx }}</strong></div>
           <div class="summary-item">XLSX<strong>{{ stats.xlsx }}</strong></div>
-          <div class="summary-item">Taille totale<strong>{{ stats.total_size_human }}</strong></div>
+          <div class="summary-item">Total size<strong>{{ stats.total_size_human }}</strong></div>
         </div>
 
       </div><!-- /docs-area -->
@@ -405,14 +405,14 @@
   </div><!-- /content -->
 </div><!-- /main -->
 
-<!-- Modal confirmation suppression -->
+<!-- Delete confirmation modal -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal">
-    <div class="modal-title">Supprimer le document</div>
-    <div class="modal-body" id="modalBody">Confirmer la suppression ?</div>
+    <div class="modal-title">Delete document</div>
+    <div class="modal-body" id="modalBody">Confirm deletion ?</div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-      <button class="btn" style="background:var(--red);color:#fff;" onclick="doDelete()">Supprimer</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="background:var(--red);color:#fff;" onclick="doDelete()">Delete</button>
     </div>
   </div>
 </div>
@@ -423,7 +423,7 @@
 
   function confirmDelete(pk, name) {
     _deleteId = pk;
-    document.getElementById('modalBody').textContent = 'Supprimer "' + name + '" et effacer son index ChromaDB ?';
+    document.getElementById('modalBody').textContent = 'Delete "' + name + '" and remove its ChromaDB index?';
     document.getElementById('deleteModal').classList.add('open');
   }
   function closeModal() {
@@ -442,18 +442,20 @@
         document.getElementById('card-' + _deleteId)?.remove();
         closeModal();
       } else {
-        alert(d.error || 'Erreur lors de la suppression.');
+        alert(d.error || 'Error while deleting.');
         closeModal();
       }
     });
   }
-  // Fermer le modal en cliquant sur l'overlay
+  // Close modal on overlay click
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
   });
 </script>
 </body>
 </html>
+
+
 
 
 

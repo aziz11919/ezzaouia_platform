@@ -19,7 +19,7 @@ def upload_view(request):
         ext = os.path.splitext(f.name)[1].lower().replace('.', '')
 
         if ext not in ['pdf', 'docx', 'xlsx']:
-            messages.error(request, "Format non supporté. Utilisez PDF, Word ou Excel.")
+            messages.error(request, "Unsupported format. Use PDF, Word, or Excel.")
             return redirect('ingestion:upload')
 
         uploaded = UploadedFile.objects.create(
@@ -60,7 +60,7 @@ def upload_view(request):
 
         # Lancer le traitement en arrière-plan (Celery)
         process_uploaded_file.delay(uploaded.id)
-        messages.success(request, f"Fichier '{f.name}' uploadé — traitement en cours...")
+        messages.success(request, f"File '{f.name}' uploaded — processing in progress...")
         return redirect('ingestion:list')
 
     return render(request, 'ingestion/upload.html')

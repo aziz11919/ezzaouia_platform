@@ -31,7 +31,7 @@ class SessionTimeoutMiddleware:
                     auth.logout(request)
                     messages.warning(
                         request,
-                        "Session expiree apres 30 min d'inactivite. Reconnectez-vous.",
+                        "Session expired after 30 minutes of inactivity. Please sign in again.",
                     )
                     self._log_session_expired(
                         request=request,

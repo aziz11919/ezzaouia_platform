@@ -1,6 +1,6 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
@@ -473,17 +473,17 @@
         <div class="logo-name">EZZ<span>AOUIA</span></div>
       </div>
     </div>
-    <div class="logo-tagline">Plateforme de Production Intelligente</div>
+    <div class="logo-tagline">Smart Production Platform</div>
   </div>
 
   <nav class="sidebar-nav">
-    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-section">Dashboard</div>
 
     <a href="{% url 'dashboard:home' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
       </svg>
-      Vue d'ensemble
+      Overview
     </a>
 
     <div class="nav-section">Modules</div>
@@ -492,14 +492,14 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
       </svg>
-      Assistant IA
+      AI Assistant
     </a>
 
     <a href="{% url 'ingestion:upload' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
       </svg>
-      Import fichiers
+      File Import
     </a>
 
     <a href="{% url 'ingestion:list' %}" class="nav-item active">
@@ -524,7 +524,7 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
       </svg>
-      Déconnexion
+      Sign out
     </a>
   </div>
 </div>
@@ -538,11 +538,11 @@
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
         </svg>
-        <span>Fichiers importés</span>
+        <span>Imported files</span>
       </div>
     </div>
     <div class="topbar-right">
-      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Changer de thème">
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Change theme">
         <svg class="icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
@@ -554,20 +554,20 @@
   </div>
 
   <div class="content">
-    <div class="section-label">Fichiers importés</div>
+    <div class="section-label">Imported files</div>
 
     <div class="list-header">
       {% if files %}
       <div class="stats-row">
         <div class="stat-pill">
           <div class="stat-num">{{ files|length }}</div>
-          <div class="stat-label">fichier{{ files|length|pluralize }}</div>
+          <div class="stat-label">file{{ files|length|pluralize }}</div>
         </div>
         <div class="stat-pill">
           <svg width="14" height="14" fill="none" stroke="var(--green)" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <div class="stat-label">indexés</div>
+          <div class="stat-label">indexed</div>
         </div>
       </div>
       {% else %}
@@ -577,7 +577,7 @@
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
         </svg>
-        Nouvel import
+        New import
       </a>
     </div>
 
@@ -586,11 +586,11 @@
       <table>
         <thead>
           <tr>
-            <th>Fichier</th>
+            <th>File</th>
             <th>Type</th>
-            <th>Statut</th>
-            <th>Lignes</th>
-            <th>Date import</th>
+            <th>Status</th>
+            <th>Rows</th>
+            <th>Import date</th>
           </tr>
         </thead>
         <tbody>
@@ -619,13 +619,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
           </svg>
         </div>
-        <div class="empty-title">Aucun document importé</div>
-        <div class="empty-sub">Importez vos rapports PDF, Word ou Excel pour les rendre disponibles à l'Assistant IA.</div>
+        <div class="empty-title">No imported document</div>
+        <div class="empty-sub">Import your PDF, Word, or Excel reports to make them available to the AI Assistant.</div>
         <a href="{% url 'ingestion:upload' %}" class="btn-import">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
-          Importer un fichier
+          Import a file
         </a>
       </div>
     </div>
@@ -636,3 +636,4 @@
 <script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html>
+

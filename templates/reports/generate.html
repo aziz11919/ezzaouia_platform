@@ -1,10 +1,10 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rapport PDF - EZZAOUIA</title>
+  <title>PDF Report - EZZAOUIA</title>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -124,8 +124,8 @@
     <div class="brand">
       <img src="{% static 'img/logomaretap.png' %}" alt="MARETAP">
       <div>
-        <div class="brand-title">Rapport PDF Mensuel</div>
-        <div class="brand-sub">Champ EZZAOUIA - CPF Zarzis</div>
+        <div class="brand-title">Monthly PDF Report</div>
+        <div class="brand-sub">EZZAOUIA Field - CPF Zarzis</div>
       </div>
     </div>
 
@@ -133,7 +133,7 @@
       <input type="hidden" name="download" value="1">
       <div class="form-row">
         <div>
-          <label for="month">Mois</label>
+          <label for="month">Month</label>
           <select id="month" name="month">
             {% for num, label in months %}
               <option value="{{ num }}" {% if selected_month == num %}selected{% endif %}>{{ label }}</option>
@@ -141,7 +141,7 @@
           </select>
         </div>
         <div>
-          <label for="year">Annee</label>
+          <label for="year">Year</label>
           <select id="year" name="year">
             {% for y in years %}
               <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
@@ -151,11 +151,12 @@
       </div>
 
       <div class="actions">
-        <button type="submit" class="btn btn-primary">Generer le rapport PDF</button>
-        <a href="{% url 'dashboard:home' %}" class="btn btn-ghost">Retour dashboard</a>
+        <button type="submit" class="btn btn-primary">Generate PDF report</button>
+        <a href="{% url 'dashboard:home' %}" class="btn btn-ghost">Back to dashboard</a>
       </div>
     </form>
   </div>
 </body>
 </html>
+
 

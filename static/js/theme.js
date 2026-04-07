@@ -9,11 +9,11 @@
     if (theme === 'dark') {
       if (sun) sun.style.display = 'block';
       if (moon) moon.style.display = 'none';
-      btn.title = 'Passer en mode clair';
+      btn.title = 'Switch to light mode';
     } else {
       if (sun) sun.style.display = 'none';
       if (moon) moon.style.display = 'block';
-      btn.title = 'Passer en mode sombre';
+      btn.title = 'Switch to dark mode';
     }
   }
 

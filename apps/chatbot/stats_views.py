@@ -15,7 +15,7 @@ from .models import ChatMessage
 @login_required
 def chatbot_stats(request):
     if getattr(request.user, "role", None) != "admin":
-        messages.error(request, "Acces reserve aux administrateurs.")
+        messages.error(request, "Access is restricted to administrators.")
         return redirect("dashboard:home")
 
     try:
@@ -104,7 +104,7 @@ def chatbot_stats(request):
     except (ProgrammingError, OperationalError):
         messages.error(
             request,
-            "Base non migree pour les stats chatbot. Executez: python manage.py migrate chatbot",
+            "Chatbot stats database is not migrated. Run: python manage.py migrate chatbot",
         )
         return redirect("chatbot:chat")
 

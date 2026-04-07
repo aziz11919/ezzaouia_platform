@@ -119,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # ── Internationalisation ──────────────────────────────────────────
-LANGUAGE_CODE = 'fr-fr'
+LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Tunis'
 USE_I18N = True
 USE_TZ = True

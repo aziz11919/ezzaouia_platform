@@ -5,8 +5,8 @@ from .models import User
 
 
 class UserCreateForm(forms.ModelForm):
-    password         = forms.CharField(widget=forms.PasswordInput, label="Mot de passe")
-    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirmer le mot de passe")
+    password         = forms.CharField(widget=forms.PasswordInput, label="Password")
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm password")
 
     class Meta:
         model  = User
@@ -17,7 +17,7 @@ class UserCreateForm(forms.ModelForm):
         cleaned = super().clean()
         p1, p2  = cleaned.get('password'), cleaned.get('password_confirm')
         if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Les mots de passe ne correspondent pas.")
+            raise forms.ValidationError("Passwords do not match.")
         if p1:
             validate_password(p1)
         return cleaned
@@ -45,14 +45,14 @@ class ProfileForm(forms.ModelForm):
 
 class SetPasswordForm(forms.Form):
     """Réinitialisation mot de passe par l'admin."""
-    password         = forms.CharField(widget=forms.PasswordInput, label="Nouveau mot de passe")
-    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirmer")
+    password         = forms.CharField(widget=forms.PasswordInput, label="New password")
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm")
 
     def clean(self):
         cleaned = super().clean()
         p1, p2  = cleaned.get('password'), cleaned.get('password_confirm')
         if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Les mots de passe ne correspondent pas.")
+            raise forms.ValidationError("Passwords do not match.")
         if p1:
             validate_password(p1)
         return cleaned
@@ -60,15 +60,15 @@ class SetPasswordForm(forms.Form):
 
 class ChangePasswordForm(forms.Form):
     """Changement de mot de passe par l'utilisateur lui-même."""
-    current_password     = forms.CharField(widget=forms.PasswordInput, label="Mot de passe actuel")
-    new_password         = forms.CharField(widget=forms.PasswordInput, label="Nouveau mot de passe")
-    new_password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirmer le nouveau")
+    current_password     = forms.CharField(widget=forms.PasswordInput, label="Current password")
+    new_password         = forms.CharField(widget=forms.PasswordInput, label="New password")
+    new_password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
 
     def clean(self):
         cleaned = super().clean()
         p1, p2  = cleaned.get('new_password'), cleaned.get('new_password_confirm')
         if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Les nouveaux mots de passe ne correspondent pas.")
+            raise forms.ValidationError("New passwords do not match.")
         if p1:
             validate_password(p1)
         return cleaned

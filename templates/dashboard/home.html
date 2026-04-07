@@ -1,6 +1,6 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <script>(function(){var t=localStorage.getItem('ezzaouia-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
@@ -604,23 +604,23 @@
         <div class="logo-name">EZZ<span>AOUIA</span></div>
       </div>
     </div>
-    <div class="logo-tagline">Plateforme de Production Intelligente</div>
+    <div class="logo-tagline">Smart Production Platform</div>
   </div>
  
   <div class="system-status">
     <div class="status-dot"></div>
-    <div class="status-text">Système opérationnel</div>
+    <div class="status-text">System online</div>
   </div>
  
   <nav class="sidebar-nav">
-    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-section">Dashboard</div>
  
     <a href="{% url 'dashboard:home' %}" class="nav-item active">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
       </svg>
-      Vue d'ensemble
-      <span class="nav-badge">Accueil</span>
+      Overview
+      <span class="nav-badge">Home</span>
     </a>
  
     <div class="nav-section">Modules</div>
@@ -629,28 +629,28 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
       </svg>
-      Assistant IA
+      AI Assistant
     </a>
  
     <a href="{% url 'ingestion:upload' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
       </svg>
-      Import fichiers
+      File Import
     </a>
 
     <a href="{% url 'bibliotheque:index' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
       </svg>
-      Bibliotheque
+      Library
     </a>
 
     <a href="{% url 'reports:generate' %}" class="nav-item">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2h-3.5a1 1 0 01-.8-.4l-1.4-1.9a1 1 0 00-.8-.4H8a2 2 0 00-2 2v15a2 2 0 002 2z"/>
       </svg>
-      Rapport PDF
+      PDF Report
     </a>
 
     <a href="{% url 'ingestion:list' %}" class="nav-item">
@@ -667,7 +667,7 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/>
       </svg>
-      Journal d'audit
+      Audit log
       <span class="nav-badge">Audit</span>
     </a>
 
@@ -676,7 +676,7 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
       </svg>
-      Gestion utilisateurs
+      User Management
       <span class="nav-badge">Admin</span>
     </a>
     {% endif %}
@@ -697,7 +697,7 @@
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
       </svg>
-      Déconnexion
+      Sign out
     </a>
   </div>
 </div>
@@ -706,17 +706,17 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-left">
-      <div class="page-title">Vue d'ensemble</div>
+      <div class="page-title">Overview</div>
       <div class="breadcrumb">
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
         </svg>
-        <span>Champ EZZAOUIA — CPF Zarzis</span>
+        <span>EZZAOUIA Field — CPF Zarzis</span>
       </div>
     </div>
     <div class="topbar-right">
       <div class="topbar-date" id="currentDate"></div>
-      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Passer en mode clair">
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Switch to light mode">
         <svg class="icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
@@ -730,7 +730,7 @@
   <div class="content">
  
     <!-- KPIs -->
-    <div class="section-label">Indicateurs de production</div>
+    <div class="section-label">Production indicators</div>
     <div class="kpi-grid">
  
       <div class="kpi-card">
@@ -739,9 +739,9 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         </div>
-        <div class="kpi-label">BOPD moyen</div>
+        <div class="kpi-label">Average BOPD</div>
         <div class="kpi-value kpi-loading" id="kpi-bopd">—</div>
-        <div class="kpi-unit">barils / jour</div>
+        <div class="kpi-unit">barrels / day</div>
       </div>
  
       <div class="kpi-card">
@@ -750,7 +750,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605"/>
           </svg>
         </div>
-        <div class="kpi-label">BSW moyen</div>
+        <div class="kpi-label">Average BSW</div>
         <div class="kpi-value kpi-loading" id="kpi-bsw">—</div>
         <div class="kpi-unit">% water cut</div>
       </div>
@@ -761,7 +761,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
           </svg>
         </div>
-        <div class="kpi-label">GOR moyen</div>
+        <div class="kpi-label">Average GOR</div>
         <div class="kpi-value kpi-loading" id="kpi-gor">—</div>
         <div class="kpi-unit">SCF / STB</div>
       </div>
@@ -772,7 +772,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/>
           </svg>
         </div>
-        <div class="kpi-label">Huile totale</div>
+        <div class="kpi-label">Total oil</div>
         <div class="kpi-value kpi-loading" id="kpi-oil">—</div>
         <div class="kpi-unit">millions STB</div>
       </div>
@@ -789,8 +789,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3"/>
           </svg>
         </div>
-        <div class="module-title">Assistant IA</div>
-        <div class="module-desc">Interrogez vos données en langage naturel. Analyses expertes basées sur votre DWH et vos documents techniques.</div>
+        <div class="module-title">AI Assistant</div>
+        <div class="module-desc">Query your data in natural language. Expert analyses based on your DWH and technical documents.</div>
       </a>
  
       <a href="{% url 'ingestion:upload' %}" class="module-card" style="--accent:#4DAA7A;--icon-bg:#0A1E14">
@@ -799,8 +799,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
           </svg>
         </div>
-        <div class="module-title">Import fichiers</div>
-        <div class="module-desc">Importez vos rapports PDF, Word et Excel. Extraction automatique et indexation pour le chatbot IA.</div>
+        <div class="module-title">File Import</div>
+        <div class="module-desc">Import your PDF, Word, and Excel reports. Automatic extraction and indexing for the AI chatbot.</div>
       </a>
  
       <a href="/api/kpis/summary/" target="_blank" class="module-card" style="--accent:#4D8FCC;--icon-bg:#0A1420">
@@ -810,26 +810,26 @@
           </svg>
         </div>
         <div class="module-title">API KPIs</div>
-        <div class="module-desc">BOPD, BSW, GOR, production cumulée par puits. API REST consommée par Power BI en DirectQuery.</div>
+        <div class="module-desc">BOPD, BSW, GOR, cumulative production by well. REST API consumed by Power BI in DirectQuery.</div>
       </a>
  
     </div>
  
     <!-- Recent files -->
-    <div class="section-label">Imports récents</div>
+    <div class="section-label">Recent imports</div>
     <div class="table-card">
       <div class="table-header">
-        <div class="table-title">Derniers fichiers traités</div>
-        <a href="{% url 'ingestion:list' %}" class="table-link">Voir tout →</a>
+        <div class="table-title">Latest processed files</div>
+        <a href="{% url 'ingestion:list' %}" class="table-link">View all →</a>
       </div>
       <table>
         <thead>
           <tr>
-            <th>Fichier</th>
+            <th>File</th>
             <th>Type</th>
-            <th>Statut</th>
-            <th>Lignes extraites</th>
-            <th>Date import</th>
+            <th>Status</th>
+            <th>Extracted rows</th>
+            <th>Import date</th>
           </tr>
         </thead>
         <tbody>
@@ -842,7 +842,7 @@
             <td>{{ f.created_at|date:"d/m/Y H:i" }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="empty-row">Aucun fichier importé — commencez par importer un rapport technique.</td></tr>
+          <tr><td colspan="5" class="empty-row">No files imported — start by importing a technical report.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -853,23 +853,24 @@
  
 <script>
   document.getElementById('currentDate').textContent =
-    new Date().toLocaleDateString('fr-FR', {
+    new Date().toLocaleDateString('en-US', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
  
   fetch('/api/kpis/summary/')
     .then(r => r.json())
     .then(d => {
-      document.getElementById('kpi-bopd').textContent = d.avg_bopd ? d.avg_bopd.toLocaleString('fr-FR') : '—';
+      document.getElementById('kpi-bopd').textContent = d.avg_bopd ? d.avg_bopd.toLocaleString('en-US') : '—';
       document.getElementById('kpi-bsw').textContent  = d.avg_bsw  ? d.avg_bsw.toFixed(2) : '—';
-      document.getElementById('kpi-gor').textContent  = d.avg_gor  ? Math.round(d.avg_gor).toLocaleString('fr-FR') : '—';
+      document.getElementById('kpi-gor').textContent  = d.avg_gor  ? Math.round(d.avg_gor).toLocaleString('en-US') : '—';
       document.getElementById('kpi-oil').textContent  = d.total_oil_stbd ? (d.total_oil_stbd / 1e6).toFixed(2) : '—';
       document.querySelectorAll('.kpi-loading').forEach(el => el.classList.remove('kpi-loading'));
     })
     .catch(() => {
-      document.querySelectorAll('.kpi-loading').forEach(el => el.textContent = 'N/D');
+    document.querySelectorAll('.kpi-loading').forEach(el => el.textContent = 'N/A');
     });
 </script>
 <script src="{% static 'js/theme.js' %}"></script>
 </body>
 </html> 
+

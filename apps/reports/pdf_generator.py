@@ -22,18 +22,18 @@ from .models import Anomalie
 
 
 MONTHS_FR = {
-    1: "Janvier",
-    2: "Fevrier",
-    3: "Mars",
-    4: "Avril",
-    5: "Mai",
-    6: "Juin",
-    7: "Juillet",
-    8: "Aout",
-    9: "Septembre",
-    10: "Octobre",
-    11: "Novembre",
-    12: "Decembre",
+    1: "January",
+    2: "February",
+    3: "March",
+    4: "April",
+    5: "May",
+    6: "June",
+    7: "July",
+    8: "August",
+    9: "September",
+    10: "October",
+    11: "November",
+    12: "December",
 }
 
 
@@ -84,11 +84,11 @@ class EzzaouiaReportGenerator:
 
         c.setFillColor(self.text_dark)
         c.setFont("Helvetica-Bold", 24)
-        c.drawCentredString(self.page_width / 2, self.page_height - 150 * mm, "RAPPORT MENSUEL DE PRODUCTION")
+        c.drawCentredString(self.page_width / 2, self.page_height - 150 * mm, "MONTHLY PRODUCTION REPORT")
 
         c.setFont("Helvetica", 14)
         c.setFillColor(self.text_muted)
-        c.drawCentredString(self.page_width / 2, self.page_height - 162 * mm, "Champ EZZAOUIA - CPF Zarzis")
+        c.drawCentredString(self.page_width / 2, self.page_height - 162 * mm, "EZZAOUIA Field - CPF Zarzis")
 
         c.setFont("Helvetica-Bold", 16)
         c.setFillColor(self.text_dark)
@@ -102,7 +102,7 @@ class EzzaouiaReportGenerator:
         c.drawCentredString(
             self.page_width / 2,
             self.page_height - 197 * mm,
-            f"Genere le {self.today.strftime('%d/%m/%Y %H:%M')}",
+            f"Generated on {self.today.strftime('%d/%m/%Y %H:%M')}",
         )
 
         c.setStrokeColor(self.primary_red)
@@ -111,13 +111,13 @@ class EzzaouiaReportGenerator:
 
     def _draw_executive_page(self):
         c = self.canvas
-        self._draw_page_title("Synthese executive")
+        self._draw_page_title("Executive Summary")
 
         kpis = [
-            ("avg_bopd", "BOPD moyen", "STB/j"),
-            ("total_oil_stbd", "Huile totale", "STB"),
-            ("avg_bsw", "BSW moyen", "%"),
-            ("avg_gor", "GOR moyen", "SCF/STB"),
+            ("avg_bopd", "Average BOPD", "STB/day"),
+            ("total_oil_stbd", "Total Oil", "STB"),
+            ("avg_bsw", "Average BSW", "%"),
+            ("avg_gor", "Average GOR", "SCF/STB"),
         ]
 
         box_w = (self.page_width - 46 * mm) / 2
@@ -134,7 +134,7 @@ class EzzaouiaReportGenerator:
 
         c.setFont("Helvetica-Bold", 12)
         c.setFillColor(self.text_dark)
-        c.drawString(20 * mm, self.page_height - 165 * mm, "Anomalies critiques du mois")
+        c.drawString(20 * mm, self.page_height - 165 * mm, "Critical anomalies of the month")
 
         anomalies = self._critical_anomalies(self.month_anomalies)
         c.setFont("Helvetica", 10)
@@ -149,14 +149,14 @@ class EzzaouiaReportGenerator:
                     break
         else:
             c.setFillColor(self.text_muted)
-            c.drawString(22 * mm, y, "Aucune anomalie critique detectee sur la periode.")
+            c.drawString(22 * mm, y, "No critical anomalies detected in this period.")
 
     def _draw_wells_page(self):
         self._draw_page_title(
-            f"Classement des puits - Top 16 ({MONTHS_FR.get(self.month, self.month)} {self.year})"
+            f"Well ranking - Top 16 ({MONTHS_FR.get(self.month, self.month)} {self.year})"
         )
 
-        data = [["#", "Puits", "BOPD", "BSW %", "GOR", "Statut"]]
+        data = [["#", "Well", "BOPD", "BSW %", "GOR", "Status"]]
         if self.ranking_rows:
             for idx, row in enumerate(self.ranking_rows[:16], start=1):
                 data.append(
@@ -166,11 +166,11 @@ class EzzaouiaReportGenerator:
                         self._fmt_num(row.get("avg_bopd"), 1),
                         self._fmt_num(row.get("avg_bsw"), 2),
                         self._fmt_num(row.get("avg_gor"), 0),
-                        row.get("status", "Actif"),
+                        row.get("status", "Active"),
                     ]
                 )
         else:
-            data.append(["-", "Aucune donnee", "-", "-", "-", "-"])
+            data.append(["-", "No data", "-", "-", "-", "-"])
 
         table = Table(data, colWidths=[12 * mm, 38 * mm, 28 * mm, 28 * mm, 30 * mm, 28 * mm], repeatRows=1)
         style = TableStyle(
@@ -193,9 +193,9 @@ class EzzaouiaReportGenerator:
         table.drawOn(self.canvas, 20 * mm, self.page_height - 245 * mm)
 
     def _draw_trend_page(self):
-        self._draw_page_title("Tendance mensuelle - annee en cours")
+        self._draw_page_title("Monthly trend - current year")
 
-        data = [["Mois", "Huile (STB)", "Eau (BLS)", "Gaz (MSCF)", "BSW %", "GOR"]]
+        data = [["Month", "Oil (STB)", "Water (BLS)", "Gas (MSCF)", "BSW %", "GOR"]]
         month_map = {int(item.get("month", 0)): item for item in self.trend_rows if item.get("month")}
 
         for m in range(1, 13):
@@ -235,9 +235,9 @@ class EzzaouiaReportGenerator:
         table.drawOn(self.canvas, 20 * mm, self.page_height - 250 * mm)
 
     def _draw_anomalies_page(self):
-        self._draw_page_title("Anomalies detectees")
+        self._draw_page_title("Detected anomalies")
 
-        data = [["Date", "Puits", "Type", "Severite", "Description"]]
+        data = [["Date", "Well", "Type", "Severity", "Description"]]
         if self.month_anomalies:
             for anomaly in self.month_anomalies[:20]:
                 detected = getattr(anomaly, "detected_at", None)
@@ -251,7 +251,7 @@ class EzzaouiaReportGenerator:
                     ]
                 )
         else:
-            data.append(["-", "-", "-", "-", "Aucune anomalie sur la periode."])
+            data.append(["-", "-", "-", "-", "No anomalies in this period."])
 
         table = Table(
             data,
@@ -311,7 +311,7 @@ class EzzaouiaReportGenerator:
         c.drawString(
             x + 4 * mm,
             y - 25 * mm,
-            f"{arrow} {self._fmt_num(abs(delta), 2)} vs mois precedent",
+            f"{arrow} {self._fmt_num(abs(delta), 2)} vs previous month",
         )
 
     def _draw_logo(self, center_y, width_mm=40, height_mm=40):
@@ -338,7 +338,7 @@ class EzzaouiaReportGenerator:
         c.drawCentredString(
             self.page_width / 2,
             8 * mm,
-            f"MARETAP S.A. - Confidentiel - Page {page_number}/{total_pages}",
+            f"MARETAP S.A. - Confidential - Page {page_number}/{total_pages}",
         )
 
     def _safe_summary(self, year, month):
@@ -366,7 +366,7 @@ class EzzaouiaReportGenerator:
         status_map = {}
         try:
             for well in DimWell.objects.filter(wellcode__in=codes):
-                status_map[well.wellcode] = "Ferme" if well.closed == "Y" else "Actif"
+                status_map[well.wellcode] = "Closed" if well.closed == "Y" else "Active"
         except Exception:
             pass
 
@@ -380,7 +380,7 @@ class EzzaouiaReportGenerator:
                     "avg_bopd": row.get("avg_bopd", 0),
                     "avg_bsw": row.get("avg_bsw", details.get("avg_bsw", 0)),
                     "avg_gor": details.get("avg_gor", 0),
-                    "status": status_map.get(code, "Actif"),
+                    "status": status_map.get(code, "Active"),
                 }
             )
         return out

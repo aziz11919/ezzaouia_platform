@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ── Sécurité ──────────────────────────────────────────────────────
 SECRET_KEY = config('SECRET_KEY', default='dev-insecure-key-changez-moi')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0').split(',')
 
 # ── Applications ──────────────────────────────────────────────────
 DJANGO_APPS = [
@@ -44,6 +44,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # ── Middleware ────────────────────────────────────────────────────
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -75,22 +76,29 @@ TEMPLATES = [
 ]
 
 # ── Base de données — SQL Server On-Premise ───────────────────────
-# Prérequis : installer "ODBC Driver 17 for SQL Server"
+# Prérequis : installer "ODBC Driver 18 for SQL Server"
 # URL : https://aka.ms/downloadmsodbcsql
+# Driver 18 active Encrypt=yes par défaut — désactivé ici (réseau interne MARETAP)
+_db_server   = config('DB_SERVER',   default=r'localhost\SQLEXPRESS')
+_db_name     = config('DB_NAME',     default='DBTEST')
+_db_user     = config('DB_USER',     default='')
+_db_password = config('DB_PASSWORD', default='')
+
 DATABASES = {
     'default': {
-        'ENGINE': 'mssql',
-        'NAME': config('DB_NAME', default='DBTEST'),
-        'HOST': config('DB_SERVER', default=r'localhost\SQLEXPRESS'),
-        'USER': config('DB_USER', default=''),
-        'PASSWORD': config('DB_PASSWORD', default=''),
+        'ENGINE':   'mssql',
+        'NAME':     _db_name,
+        'HOST':     _db_server,
+        'USER':     _db_user,
+        'PASSWORD': _db_password,
+        'PORT':     '',
         'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
-            'extra_params': ';'.join([
-                'Trusted_Connection=' + config('DB_TRUSTED_CONNECTION', default='no'),
-                'Encrypt=' + config('DB_ENCRYPT', default='no'),
-                'TrustServerCertificate=' + config('DB_TRUST_SERVER_CERTIFICATE', default='yes'),
-            ]),
+            'driver': 'ODBC Driver 18 for SQL Server',
+            'extra_params': (
+                'Encrypt=no;'
+                'TrustServerCertificate=yes;'
+                'Connection Timeout=30;'
+            ),
         },
     }
 }
@@ -127,8 +135,20 @@ USE_TZ = True
 
 # ── Fichiers statiques & media ────────────────────────────────────
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+}
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -140,8 +160,8 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-# Résultats stockés dans SQL Server via django-celery-results
-CELERY_RESULT_BACKEND = 'django-db'
+# Résultats : 'django-db' (SQL Server) ou 'redis://redis:6379/0' (Docker Redis)
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='django-db')
 
 # ── Django REST Framework ─────────────────────────────────────────
 REST_FRAMEWORK = {

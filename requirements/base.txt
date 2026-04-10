@@ -33,3 +33,4 @@ python-decouple==3.8       # Lecture du fichier .env
 django-guardian==2.4.0     # RBAC niveau objet
 Pillow==11.0.0             # Traitement images (optionnel)
 reportlab==4.4.10          # Generation PDF
+whitenoise==6.8.2          # Serving fichiers statiques (DEBUG=False / Docker)

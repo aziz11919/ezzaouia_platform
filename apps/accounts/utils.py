@@ -1,5 +1,5 @@
-import secrets
-import string
+import secrets #Module pour générer mots de passe et tokens sécurisés
+import string  #contient lettres, chiffres etc (ascii_letters, digits...)
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -11,20 +11,20 @@ def generate_random_password(length=12):
     Format: at least 1 uppercase, 1 lowercase, 1 digit, 1 symbol.
     Example: Xk7#mP2qRt9!
     """
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"  #caractères autorisés
     while True:
-        password = ''.join(secrets.choice(alphabet) for _ in range(length))
-        has_upper  = any(c.isupper() for c in password)
-        has_lower  = any(c.islower() for c in password)
-        has_digit  = any(c.isdigit() for c in password)
-        has_symbol = any(c in "!@#$%^&*" for c in password)
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))  #génère mot de passe aléatoire
+        has_upper  = any(c.isupper() for c in password) #vérifie présence majuscule
+        has_lower  = any(c.islower() for c in password) #vérifie présence minuscule
+        has_digit  = any(c.isdigit() for c in password)#vérifie présence chiffre
+        has_symbol = any(c in "!@#$%^&*" for c in password)#vérifie présence symbole
         if has_upper and has_lower and has_digit and has_symbol:
             return password
 
 
 def generate_reset_token():
     """Generate a secure token for password reset."""
-    return secrets.token_urlsafe(32)
+    return secrets.token_urlsafe(32) #génère token sécurisé de 32 caractères (URL-safe)
 
 
 def send_welcome_email(user, plain_password):

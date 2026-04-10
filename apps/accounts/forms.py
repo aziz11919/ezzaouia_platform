@@ -9,24 +9,24 @@ class UserCreateForm(forms.ModelForm):
     password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm password")
 
     class Meta:
-        model  = User
+        model  = User  #Le formulaire est basé sur le modèle User
         fields = ['username', 'first_name', 'last_name', 'email',
                   'role', 'department', 'phone', 'is_active']
 
-    def clean(self):
-        cleaned = super().clean()
-        p1, p2  = cleaned.get('password'), cleaned.get('password_confirm')
+    def clean(self):  #valider tout le formulaire
+        cleaned = super().clean()  #Récupère les données nettoyées du formulaire
+        p1, p2  = cleaned.get('password'), cleaned.get('password_confirm')  #Récupère password et password_confirm
         if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Passwords do not match.")
+            raise forms.ValidationError("Passwords do not match.")  # raise : arrêter l'exécution et afficher un message d'erreur.
         if p1:
             validate_password(p1)
         return cleaned
 
     def save(self, commit=True):
-        user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password'])
+        user = super().save(commit=False)  #Crée l'utilisateur sans l'enregistrer en base
+        user.set_password(self.cleaned_data['password'])  #Hash le mot de passe avant de le sauvegarder
         if commit:
-            user.save()
+            user.save()  #Sauvegarde l'utilisateur dans la base
         return user
 
 
@@ -34,7 +34,7 @@ class UserEditForm(forms.ModelForm):
     class Meta:
         model  = User
         fields = ['username', 'first_name', 'last_name', 'email',
-                  'role', 'department', 'phone', 'is_active']
+                  'role', 'department', 'phone', 'is_active']  
 
 
 class ProfileForm(forms.ModelForm):
@@ -66,7 +66,11 @@ class ChangePasswordForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        current = cleaned.get('current_password')
         p1, p2  = cleaned.get('new_password'), cleaned.get('new_password_confirm')
+        # verifier ancien mot de passe
+        if current and not self.user.check_password(current):
+            raise forms.ValidationError("Current password is incorrect")
         if p1 and p2 and p1 != p2:
             raise forms.ValidationError("New passwords do not match.")
         if p1:

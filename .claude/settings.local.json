@@ -10,7 +10,11 @@
       "Bash(python:*)",
       "Bash(venv\\\\Scripts\\\\python.exe:*)",
       "Bash(venv/Scripts/python.exe:*)",
-      "Bash(dir C:\\\\ezzaouia_platform/)"
+      "Bash(dir C:\\\\ezzaouia_platform/)",
+      "Bash(docker cp *)",
+      "Bash(docker exec *)",
+      "Bash(docker restart *)",
+      "Bash(npm run *)"
     ]
   }
 }

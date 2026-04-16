@@ -46,7 +46,7 @@ def update_user_memory(user, question, answer, well=None):
     try:
         from .models import UserMemory
         topic     = _detect_topic(question)
-        well_code = well.wellcode if well else None
+        well_code = well.well_code if well else None
         summary   = answer[:200].replace('\n', ' ').strip()
 
         UserMemory.objects.update_or_create(

@@ -5,6 +5,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 
 from apps.audit.models import AuditLog
+from apps.core.views import serve_react
 
 from .pdf_generator import EzzaouiaReportGenerator
 
@@ -60,30 +61,4 @@ def generate_report(request):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
-    now = datetime.now()
-    years = list(range(now.year - 5, now.year + 2))
-    months = [
-        (1, "January"),
-        (2, "February"),
-        (3, "March"),
-        (4, "April"),
-        (5, "May"),
-        (6, "June"),
-        (7, "July"),
-        (8, "August"),
-        (9, "September"),
-        (10, "October"),
-        (11, "November"),
-        (12, "December"),
-    ]
-
-    return render(
-        request,
-        "reports/generate.html",
-        {
-            "selected_year": selected_year,
-            "selected_month": selected_month,
-            "years": years,
-            "months": months,
-        },
-    )
+    return serve_react(request)

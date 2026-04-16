@@ -155,9 +155,9 @@ def normalize_well_code(text):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             raw  = match.group(1).upper().replace(' ', '').replace('#', '')
-            well = DimWell.objects.filter(wellcode__icontains=raw.replace('-', '')).first()  #icontains = recherche flexible
+            well = DimWell.objects.filter(well_code__icontains=raw.replace('-', '')).first()  #icontains = recherche flexible
             if not well:
-                well = DimWell.objects.filter(wellcode__icontains=raw).first()
+                well = DimWell.objects.filter(well_code__icontains=raw).first()
             if well:
                 return well
     return None
@@ -181,12 +181,11 @@ def get_sql_context(question):
 === PRODUCTION GLOBALE CHAMP EZZAOUIA ===
 - BOPD moyen       : {s['avg_bopd']:,.1f} barils/jour
 - Huile totale     : {s['total_oil_stbd']:,.0f} STB
-- Eau totale       : {s['total_water_blsd']:,.0f} BLS
+- Eau totale (BWPD): {s['total_water_bwpd']:,.0f} BWPD
 - Gaz total        : {s['total_gas_mscf']:,.0f} MSCF
 - BSW moyen        : {s['avg_bsw']:.2f}%
 - GOR moyen        : {s['avg_gor']:,.0f} SCF/STB
 - Heures prod moy  : {s['avg_prodhours']:.1f} h/j
-- Ventes totales   : {s['total_sales']:,.0f}
 """
 
     if any(w in q for w in ['meilleur', 'top', 'performer', 'classement',
@@ -236,22 +235,25 @@ def get_sql_context(question):
     if well:
         if len(years_found) >= 2:
             y_start, y_end = int(min(years_found)), int(max(years_found))
-            kpis  = get_well_kpis(well_key=well.wellkey, year=None)
-            trend = get_monthly_trend(well_key=well.wellkey, year_start=y_start, year_end=y_end)
+            kpis  = get_well_kpis(well_key=well.well_key, year=None)
+            trend = get_monthly_trend(well_key=well.well_key, year_start=y_start, year_end=y_end)
         else:
             year  = int(years_found[0]) if years_found else None
-            kpis  = get_well_kpis(well_key=well.wellkey, year=year)
-            trend = get_monthly_trend(well_key=well.wellkey, year=year)
-        context += f"\n=== PUITS {well.wellcode} — {well.libelle} ===\n"
+            kpis  = get_well_kpis(well_key=well.well_key, year=year)
+            trend = get_monthly_trend(well_key=well.well_key, year=year)
+        context += f"\n=== PUITS {well.well_code} — {well.libelle} ===\n"
         context += f"- Statut : {'Fermé' if well.closed == 'Y' else 'Actif'}\n"
         context += f"- Layer  : {well.layer}\n"
         if kpis:
             k = kpis[0]
-            context += f"- BOPD moy : {k['avg_bopd']:,.1f}\n"
-            context += f"- BOPD max : {k['max_bopd']:,.0f}\n"
-            context += f"- BSW moy  : {k['avg_bsw']:.2f}%\n"
-            context += f"- GOR moy  : {k['avg_gor']:,.0f}\n"
-            context += f"- Huile tot: {k['total_oil']:,.0f} STB\n"
+            context += f"- BOPD moy      : {k['avg_bopd']:,.1f} STB/j\n"
+            context += f"- BOPD max      : {k['max_bopd']:,.0f} STB/j\n"
+            context += f"- Gaz (MSCF)    : {k['total_gas'] or 0:,.0f} MSCF\n"
+            context += f"- Eau (BWPD)    : {k['total_water'] or 0:,.0f} BWPD\n"
+            context += f"- BSW moy       : {k['avg_bsw'] or 0:.2f}%\n"
+            context += f"- GOR moy       : {k['avg_gor'] or 0:,.0f} SCF/STB\n"
+            context += f"- Heures prod   : {k['avg_prodhours'] or 0:.1f} h/j\n"
+            context += f"- Huile totale  : {k['total_oil']:,.0f} STB\n"
         if trend:
             context += "\nHistorique mensuel :\n"
             for t in trend:
@@ -270,11 +272,41 @@ def get_sql_context(question):
         for w in top:
             context += f"  {w['well_code']:8} — BSW: {w['avg_bsw']:>5.1f}% — BOPD: {w['avg_bopd']:>8,.1f}\n"
 
+    if any(w in q for w in ['tank', 'bac', 'stockage', 'volumebbls', 'niveau', 'bbls']):
+        from apps.kpis.calculators import get_tank_levels
+        tanks = get_tank_levels()
+        if tanks:
+            context += f"\n=== NIVEAUX TANKS (dernières données) ===\n"
+            seen = {}
+            for t in tanks:
+                code = t.get('tank_code', '-')
+                seen[code] = t
+            for code, t in seen.items():
+                context += (f"- {code:10} ({t.get('tank_name',''):20}) "
+                            f"— {t.get('date','')} : {t.get('volume') or 0:,} BBL\n")
+
+    if any(w in q for w in ['statut', 'status', 'heures', 'prodhours',
+                             'pression', 'choke', 'tubing', 'casing']):
+        from apps.kpis.calculators import get_well_status_kpis
+        well_ref = normalize_well_code(question)
+        if well_ref:
+            status_data = get_well_status_kpis(well_key=well_ref.well_key)
+            if status_data:
+                latest = status_data[0]
+                context += f"\n=== STATUT OPÉRATIONNEL {well_ref.well_code} (dernière entrée) ===\n"
+                context += f"- ProdHours  : {latest.get('prodhours_val') or '-'} h\n"
+                context += f"- BSW        : {latest.get('bsw_val') or '-'} %\n"
+                context += f"- GOR        : {latest.get('gor_val') or '-'} SCF/STB\n"
+                context += f"- FlowTemp   : {latest.get('flowtemp_val') or '-'} °F\n"
+                context += f"- Choke 16\"  : {latest.get('choke_val') or '-'}\n"
+                context += f"- Tubing     : {latest.get('tubing_val') or '-'} psig\n"
+                context += f"- Casing     : {latest.get('casing_val') or '-'} psig\n"
+
     if any(w in q for w in ['liste', 'tous les puits', 'combien', 'inventaire']):
-        wells = DimWell.objects.all().order_by('wellcode')
+        wells = DimWell.objects.all().order_by('well_code')
         context += f"\n=== INVENTAIRE ({wells.count()} puits) ===\n"
         for w in wells:
-            context += (f"- {w.wellcode:8} ({w.libelle[:25]:25}) "
+            context += (f"- {w.well_code:8} ({w.libelle[:25]:25}) "
                         f"— {'Fermé' if w.closed == 'Y' else 'Actif':6} "
                         f"— Layer: {w.layer}\n")
 
@@ -352,7 +384,7 @@ def build_chart_data(question):
             return None
 
         date_start, date_end = parse_date_range(question)
-        trend = get_monthly_trend(well_key=well.wellkey, date_start=date_start, date_end=date_end)
+        trend = get_monthly_trend(well_key=well.well_key, date_start=date_start, date_end=date_end)
         if not trend:
             return None
 
@@ -361,7 +393,7 @@ def build_chart_data(question):
         bsw_data = [round(float(t['avg_bsw'] or 0), 2) for t in trend]
 
         return {
-            'well_code': well.wellcode,
+            'well_code': well.well_code,
             'well_name': well.libelle or '',
             'labels':    labels,
             'datasets': [
@@ -426,7 +458,7 @@ def generate_suggestions(question, well=None, lang='fr'):
         return fr_text
 
     if well:
-        wc = well.wellcode
+        wc = well.well_code
         return [
             choose(
                 f"Quelles interventions workover ont ete realisees sur le puits {wc} ?",
@@ -595,6 +627,21 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 doc_context += "\n".join(chunks)
 
         sql_context = get_sql_context(question)
+        logger.info(f"SQL CONTEXT: {sql_context[:500] if sql_context else 'VIDE'}")
+
+        # Si le SQL répond à une question de production/classement, bloquer les documents
+        # pour éviter que Llama3 ancre sur des chiffres PDF contradictoires
+        sql_has_data = bool(sql_context and len(sql_context.strip()) > 50)
+        production_keywords = [
+            'top', 'meilleur', 'classement', 'performer', 'production', 'bopd',
+            'stb', 'total', 'puits', 'well', 'barils', 'huile', 'oil', 'resume',
+            'résumé', 'bilan', 'global', 'champ', 'field', 'kpi', 'performance',
+        ]
+        has_production_question = any(w in q_lower for w in production_keywords)
+
+        if sql_has_data and has_production_question:
+            doc_context = ""
+            logger.info("SQL data present pour question production -> documents supprimes du prompt")
 
         history_text = ""
         if history and len(history) > 0:
@@ -610,49 +657,76 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         top_n_match = re.search(r'\btop\s+(\d+)\b', question, re.IGNORECASE)
         top_n = int(top_n_match.group(1)) if top_n_match else None
         top_n_rule = (
-            f"\n6. La question demande exactement TOP {top_n} - tu DOIS lister "
+            f"\n9. La question demande exactement TOP {top_n} - tu DOIS lister "
             f"exactement {top_n} elements, ni plus ni moins, dans TOUTES les sections de ta reponse."
             if top_n else ""
         )
 
-        prompt = f"""Tu es un Expert Senior en Ingenierie de Production Petroliere et Asset Management pour le champ EZZAOUIA (MARETAP, Tunisie - CPF Zarzis).
+        docs_section = (
+            f"=== DOCUMENTS DE REFERENCE (texte qualitatif uniquement — JAMAIS utiliser pour des chiffres de production) ===\n"
+            f"{doc_context}\n"
+            f"=== FIN DOCUMENTS ==="
+            if doc_context else
+            "(Aucun document : repondre exclusivement avec les donnees base de donnees ci-dessus.)"
+        )
+
+        prompt = f"""=== DONNÉES OFFICIELLES BASE DE DONNÉES EZZAOUIA (SOURCE UNIQUE ET DÉFINITIVE) ===
+{sql_context if sql_context else "Aucune donnee SQL pertinente pour cette question."}
+=== FIN DONNÉES BASE ===
+
+INSTRUCTION CRITIQUE : Les chiffres ci-dessus sont les SEULES données numériques autorisées.
+Toute valeur issue des documents ci-dessous qui contredit ces chiffres DOIT être ignorée.
+Si la section DONNÉES OFFICIELLES contient un classement de puits, répondre UNIQUEMENT avec ces données.
+
+---
+
+Tu es un Expert Senior en Ingenierie de Production Petroliere et Asset Management pour le champ EZZAOUIA (MARETAP, Tunisie - CPF Zarzis).
+
+=== SCHEMA DATA WAREHOUSE (SQL SERVER) ===
+TABLES DISPONIBLES — utilise UNIQUEMENT ces noms exacts :
+
+1. FactProduction   : FactProdKey, DateKey(FK), WellKey(FK), WellStatusKey(FK),
+                      DailyOilPerWellSTBD, DailyGasPerWellMSCF, WellStatusWaterBWPD
+2. FactTankLevel    : FactTankKey, TankKey(FK), DateKey(FK), VolumeBBLS
+3. DimDate          : DateKey, FullDate, Day, Month, Year, Quarter, MonthName
+4. DimWell          : WellKey, WellCode, Libelle, Layer, Closed, PowerTypeKey(FK),
+                      ProdMethodKey(FK), TypeWellKey(FK)
+5. DimWellStatus    : WellStatusKey, WellKey(FK), DateKey(FK), ProdHours, BSW, GOR,
+                      FlowTempDegF, TubingPsig, CasingPsig, Remarque
+6. DimTank          : TankKey, TankCode, TankName
+
+TABLES SUPPRIMEES (ne jamais utiliser) : FactDailyProduction, FactWellTest
 
 === REGLES ABSOLUES ===
 1. LANGUE DETECTEE : {lang}
    Reponds OBLIGATOIREMENT en {langue_nom}.
-   Si arabe -> utilise terminologie petroliere arabe standard.
-   Si anglais -> utilise international petroleum terminology.
-   Si francais -> terminologie petroliere francaise.
-2. Utilise UNIQUEMENT les donnees ci-dessous. Zero hallucination.
+2. Utilise UNIQUEMENT les donnees de la section DONNÉES OFFICIELLES ci-dessus. Zero hallucination.
 3. Info manquante -> "Information non disponible dans les donnees actuelles."
-4. Ne jamais melanger les informations de sources differentes.
-5. Hors sujet EZZAOUIA -> "Hors perimetre."{top_n_rule}
+4. Hors sujet EZZAOUIA -> "Hors perimetre."
+5. SQL INTERDIT : Ne jamais citer FactDailyProduction ni FactWellTest (tables supprimees).
+6. CHIFFRES DE PRODUCTION : Utiliser exclusivement les valeurs de la section DONNÉES OFFICIELLES.
+   INTERDIT d'utiliser des chiffres de production issus des documents si la base de donnees contient deja ces informations.
+7. CLASSEMENT DE PUITS : Si DONNÉES OFFICIELLES contient un classement (BOPD, Total STB),
+   utiliser UNIQUEMENT ce classement. Ne jamais le remplacer par des donnees de documents PDF.
+8. DOCUMENTS : Autorises uniquement pour contexte qualitatif (workover, geologie, historique evenements).
+   JAMAIS pour des chiffres de production, BOPD, STB, BSW, GOR si la DB en contient.{top_n_rule}
 
 === LANGUE DE REPONSE ===
-Langue detectee : {lang}
-Reponds UNIQUEMENT dans cette langue.
-Terminologie technique adaptee a la langue.
-
-=== DOCUMENTS DISPONIBLES ===
-{docs_list}
+Langue detectee : {lang} — Reponds UNIQUEMENT dans cette langue.
 
 === FORMAT DE REPONSE ===
+- CLASSEMENT / TOP N : tableau avec rang, code puits, BOPD moyen, total STB, BSW%.
 - ANALYSE PERFORMANCE : synthese executive + indicateurs + alertes manageriales.
 - RESERVOIR (WCT/GOR/pression) : tendances, risques, recommandations G&G.
-- HISTORIQUE (annee/evenement) : chronologie, donnees periode, impact production.
-- QUESTION SIMPLE : reponse directe (valeur + unite + source).
-
-LANGUE : Remplir tous les tableaux en {lang}.
-Les en-tetes de colonnes restent dans la langue detectee.
+- QUESTION SIMPLE : reponse directe (valeur + unite).
 
 {history_text}
 {memory_context}
 
-=== DONNEES SQL SERVER ===
-{sql_context if sql_context else "Aucune donnee SQL pertinente."}
+=== DOCUMENTS DISPONIBLES ===
+{docs_list}
 
-=== DOCUMENTS TECHNIQUES INDEXES ===
-{doc_context if doc_context else "Aucun extrait pertinent trouve."}
+{docs_section}
 
 === QUESTION ===
 {question}

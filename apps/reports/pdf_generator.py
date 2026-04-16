@@ -365,8 +365,8 @@ class EzzaouiaReportGenerator:
         codes = [row.get("well_code") for row in top_rows if row.get("well_code")]
         status_map = {}
         try:
-            for well in DimWell.objects.filter(wellcode__in=codes):
-                status_map[well.wellcode] = "Closed" if well.closed == "Y" else "Active"
+            for well in DimWell.objects.filter(well_code__in=codes):
+                status_map[well.well_code] = "Closed" if well.closed == "Y" else "Active"
         except Exception:
             pass
 

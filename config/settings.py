@@ -26,6 +26,8 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'guardian',
     'django_celery_results',
+    'django_celery_beat',
+    'corsheaders',
 ]
 LOCAL_APPS = [
     'apps.core',
@@ -43,6 +45,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # ── Middleware ────────────────────────────────────────────────────
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -55,6 +58,9 @@ MIDDLEWARE = [
     'apps.audit.middleware.AuditMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Required for React template mirroring inside same-origin iframes.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -155,7 +161,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── Celery — Tâches asynchrones ───────────────────────────────────
 # Broker : Memurai (Redis pour Windows) — port 6379
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
+CELERY_BROKER_URL = config('CELERY_BROKER_URL',default='redis://redis:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -201,6 +207,19 @@ DEFAULT_FROM_EMAIL  = 'EZZAOUIA Platform <noreply@maretap.tn>'
 
 # Platform base URL used in emails
 PLATFORM_HOST = config('PLATFORM_HOST', default='192.168.87.x:8000')
+
+# ── CORS — React frontend (http://localhost:3000) ─────────────────
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
 
 # ── Logging ───────────────────────────────────────────────────────
 LOGGING = {

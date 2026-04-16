@@ -10,6 +10,7 @@ djangorestframework==3.15.2
 celery==5.4.0
 redis==5.0.8               # Broker Celery (via Memurai sur Windows)
 django-celery-results==2.5.1
+django-celery-beat==2.6.0
 
 # ─── Extraction de fichiers ──────────────────────────────────────
 PyPDF2==3.0.1
@@ -29,6 +30,7 @@ langchain-huggingface==0.1.2  # Pinned: 0.1.x compatible avec langchain-core 0.3
 huggingface-hub>=0.23.0       # HuggingFace Hub client
 
 # ─── Sécurité & utilitaires ──────────────────────────────────────
+django-cors-headers==4.3.1 # CORS pour le frontend React
 python-decouple==3.8       # Lecture du fichier .env
 django-guardian==2.4.0     # RBAC niveau objet
 Pillow==11.0.0             # Traitement images (optionnel)

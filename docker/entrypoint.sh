@@ -49,25 +49,30 @@ else:
     print('WARNING: SQL Server unreachable — continuing anyway')
 " || true
 
-# Lancer les migrations Django (tables internes uniquement)
-echo "[2/4] Running migrations..."
-python manage.py makemigrations --noinput 2>/dev/null || true
-python manage.py makemigrations accounts  --noinput 2>/dev/null || true
-python manage.py makemigrations chatbot   --noinput 2>/dev/null || true
-python manage.py makemigrations ingestion --noinput 2>/dev/null || true
-python manage.py makemigrations audit     --noinput 2>/dev/null || true
+if [ "$1" = "waitress" ]; then
+    # Contrainte projet: ne jamais exécuter migrate automatiquement.
+    # Activer explicitement via RUN_MIGRATIONS=1 si nécessaire.
+    if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
+        echo "[2/4] Running migrations (RUN_MIGRATIONS=1)..."
+        python manage.py makemigrations --noinput 2>/dev/null || true
+        python manage.py makemigrations accounts  --noinput 2>/dev/null || true
+        python manage.py makemigrations chatbot   --noinput 2>/dev/null || true
+        python manage.py makemigrations ingestion --noinput 2>/dev/null || true
+        python manage.py makemigrations audit     --noinput 2>/dev/null || true
 
-# Retry migrate 3 fois avec délai
-for attempt in 1 2 3; do
-    echo "Migration attempt $attempt/3..."
-    python manage.py migrate --run-syncdb && break
-    echo "Migration failed, retrying in 5 seconds..."
-    sleep 5
-done
+        for attempt in 1 2 3; do
+            echo "Migration attempt $attempt/3..."
+            python manage.py migrate --run-syncdb && break
+            echo "Migration failed, retrying in 5 seconds..."
+            sleep 5
+        done
+    else
+        echo "[2/4] Skipping migrations (RUN_MIGRATIONS=${RUN_MIGRATIONS:-0})."
+    fi
 
-# Créer superuser si pas encore créé
-echo "[3/4] Checking superuser..."
-python manage.py shell -c "
+    # Créer superuser si pas encore créé
+    echo "[3/4] Checking superuser..."
+    python manage.py shell -c "
 from apps.accounts.models import User
 if not User.objects.filter(is_superuser=True).exists():
     User.objects.create_superuser(
@@ -82,10 +87,13 @@ else:
     print('Superuser already exists.')
 " || true
 
-# Collecter les fichiers statiques (au runtime pour accès aux volumes)
-echo "[3.5/4] Collecting static files..."
-python manage.py collectstatic --noinput --clear 2>/dev/null || \
-python manage.py collectstatic --noinput || true
+    # Collecter les fichiers statiques (au runtime pour accès aux volumes)
+    echo "[3.5/4] Collecting static files..."
+    python manage.py collectstatic --noinput --clear 2>/dev/null || \
+    python manage.py collectstatic --noinput || true
+else
+    echo "[2/4] Skipping migrations/bootstrap for service: $1"
+fi
 
 echo "[4/4] Starting service: $1"
 

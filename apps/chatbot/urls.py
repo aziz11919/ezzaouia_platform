@@ -21,4 +21,7 @@ urlpatterns = [
     path('shared/<str:token>/', views.shared_session_view, name='shared_session'),
     path('users/', views.list_users, name='list_users'),
     path('shared-with-me/', views.shared_with_me, name='shared_with_me'),
+    # API JSON pour React
+    path('sessions/',                              views.api_sessions,         name='api_sessions'),
+    path('session/<int:session_id>/messages/',     views.api_session_messages, name='api_session_messages'),
 ]

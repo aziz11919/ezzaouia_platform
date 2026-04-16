@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from apps.audit.models import AuditLog
+from apps.core.views import serve_react
 from apps.ingestion.models import UploadedFile
 from .models import ChatSession, ChatMessage, AnalysisComment, SessionShare
 from .morning_suggestions import generate_morning_suggestions
@@ -58,37 +59,12 @@ def _preselected_docs(request):
 
 @login_required
 def chat_view(request):
-    """Page d'accueil du chatbot — aucune session créée."""
-    _cleanup_empty_sessions(request.user)
-    return render(request, 'chatbot/chat.html', {
-        'sessions':              _sessions_list(request.user),
-        'current_session':       None,
-        'messages':              [],
-        'session_id_js':         'null',
-        'preselected_docs_json': json.dumps(_preselected_docs(request)),
-    })
+    return serve_react(request)
 
 
 @login_required
 def session_view(request, session_id):
-    """Afficher une session existante."""
-    _cleanup_empty_sessions(request.user)
-    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
-    try:
-        chat_messages = list(session.messages.order_by('created_at'))
-    except (ProgrammingError, OperationalError):
-        django_messages.error(
-            request,
-            "Chatbot database is not migrated. Run: python manage.py migrate chatbot",
-        )
-        chat_messages = []
-    return render(request, 'chatbot/chat.html', {
-        'sessions':              _sessions_list(request.user),
-        'current_session':       session,
-        'messages':              chat_messages,
-        'session_id_js':         str(session.id),
-        'preselected_docs_json': json.dumps(_preselected_docs(request)),
-    })
+    return serve_react(request)
 
 
 @login_required
@@ -562,9 +538,70 @@ def share_session(request, session_id):
 @login_required
 def shared_session_view(request, token):
     """Afficher une session partagée en lecture seule."""
-    session = get_object_or_404(ChatSession, share_token=token, is_shared=True)
-    messages_qs = session.messages.order_by('created_at')
-    return render(request, 'chatbot/shared_session.html', {
-        'session':  session,
-        'messages': messages_qs,
+    session = get_object_or_404(
+        ChatSession.objects.select_related('user'),
+        share_token=token,
+        is_shared=True,
+    )
+
+    is_owner = session.user_id == request.user.id
+    is_shared_with_user = SessionShare.objects.filter(
+        session=session,
+        shared_with=request.user,
+    ).exists()
+
+    if not (is_owner or is_shared_with_user or getattr(request.user, 'is_admin', False)):
+        django_messages.error(request, "Unauthorized access.")
+        return redirect('chatbot:chat')
+
+    if is_shared_with_user:
+        SessionShare.objects.filter(session=session, shared_with=request.user).update(viewed=True)
+
+    context = {
+        'session': session,
+        'messages': session.messages.order_by('created_at'),
+    }
+    return render(request, 'chatbot/shared_session.html', context)
+
+
+# ── API JSON pour React frontend ─────────────────────────────────
+
+@login_required
+@require_GET
+def api_sessions(request):
+    """GET /chatbot/sessions/ — liste des sessions de l'utilisateur."""
+    _cleanup_empty_sessions(request.user)
+    sessions = ChatSession.objects.filter(user=request.user).order_by('-created_at')[:30]
+    return JsonResponse({
+        'sessions': [
+            {
+                'id':         s.id,
+                'title':      s.title,
+                'created_at': s.created_at.strftime('%d/%m/%Y %H:%M'),
+            }
+            for s in sessions
+        ]
     })
+
+
+@login_required
+@require_GET
+def api_session_messages(request, session_id):
+    """GET /chatbot/session/<id>/messages/ — messages d'une session."""
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    msgs = session.messages.order_by('created_at')
+    return JsonResponse({
+        'session_id': session.id,
+        'title':      session.title,
+        'messages': [
+            {
+                'id':         m.id,
+                'question':   m.question,
+                'answer':     m.answer,
+                'duration':   getattr(m, 'duration_seconds', None),
+                'created_at': m.created_at.strftime('%d/%m/%Y %H:%M'),
+            }
+            for m in msgs
+        ]
+    })
+

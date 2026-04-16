@@ -1630,6 +1630,10 @@
       });
 
       const data = await resp.json();
+      const answerText =
+        (typeof data.answer === 'string' ? data.answer : '') ||
+        (typeof data.response === 'string' ? data.response : '') ||
+        (typeof data.reponse === 'string' ? data.reponse : '');
 
       if (data.stopped) {
         thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--text-muted);font-style:italic;">Generation stopped.</div>';
@@ -1637,7 +1641,7 @@
         thinkingContent.innerHTML = '<div class="msg-bubble" style="color:var(--red)">Error : ' + data.error + '</div>';
       } else {
         thinkingContent.innerHTML =
-          '<div class="msg-bubble">' + renderMarkdown(data.answer) + '</div>' +
+          '<div class="msg-bubble">' + renderMarkdown(answerText || 'No answer text returned by server.') + '</div>' +
           '<div class="msg-meta">' +
             '<svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
             data.duration + 's' +

@@ -147,6 +147,7 @@ def api_documents(request):
     file_type = request.GET.get("type", "").strip()
     year = request.GET.get("year", "").strip()
     well = request.GET.get("well", "").strip()
+    uploaded_by = request.GET.get("uploaded_by", "").strip()
 
     if search:
         qs = qs.filter(original_name__icontains=search)
@@ -156,11 +157,18 @@ def api_documents(request):
         qs = qs.filter(created_at__year=int(year))
     if well and well in WELLS:
         qs = qs.filter(original_name__icontains=well)
+    if uploaded_by:
+        qs = qs.filter(uploaded_by__username=uploaded_by)
 
     qs = qs.order_by("-created_at")
 
     all_docs_qs = UploadedFile.objects.filter(status="success")
     total_size_bytes = sum(_safe_file_size(doc) for doc in all_docs_qs.only("id", "file"))
+    uploaders = sorted(
+        all_docs_qs.exclude(uploaded_by__isnull=True)
+        .values_list("uploaded_by__username", flat=True)
+        .distinct()
+    )
     stats = {
         "total": all_docs_qs.count(),
         "pdf": all_docs_qs.filter(file_type="pdf").count(),
@@ -192,6 +200,7 @@ def api_documents(request):
         "stats": stats,
         "available_years": available_years,
         "wells": WELLS,
+        "uploaders": uploaders,
         "page": page_obj.number,
         "pages": paginator.num_pages,
         "total": paginator.count,

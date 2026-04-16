@@ -1,11 +1,14 @@
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 import json
+import logging
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
 from datetime import timedelta
 from functools import wraps
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -16,10 +19,37 @@ from .models import User
 from .utils import (
     generate_random_password,
     generate_reset_token,
-    send_welcome_email,
     send_password_reset_email,
     send_password_changed_email,
 )
+
+logger = logging.getLogger('apps')
+
+
+def send_password_email(user, password):
+    try:
+        send_mail(
+            subject='Your EZZAOUIA Platform access',
+            message=f'''Hello {user.get_full_name() or user.username},
+
+Your account has been created on EZZAOUIA Platform.
+
+Login: {user.username}
+Temporary password: {password}
+
+Please change your password after first login.
+
+EZZAOUIA Platform — MARETAP S.A.
+''',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        logger.info(f"Password email sent to {user.email} for user {user.username}")
+        return True
+    except Exception as e:
+        logger.error(f'Email error for {user.username}: {e}')
+        return False
 
 
 def _is_json_request(request):
@@ -316,7 +346,7 @@ def create_user(request):
         elif User.objects.filter(username=username).exists():
             errors.append("Username already exists.")
         if not email:
-            errors.append("Email is required.")
+            errors.append("Email required to send password")
         elif User.objects.filter(email=email).exists():
             errors.append("Email already in use.")
         elif not email.endswith('@maretap.tn'):
@@ -345,11 +375,15 @@ def create_user(request):
         user.must_change_password = True
         user.save()
 
-        try:
-            send_welcome_email(user, plain_password)
+        if send_password_email(user, plain_password):
             messages.success(request, f"User {username} created. Password sent to {email}.")
-        except Exception as e:
-            messages.warning(request, f"User created but email failed: {e}. Password: {plain_password}")
+            return redirect('accounts:user_list')
+        else:
+            messages.warning(
+                request,
+                f"User created but email failed for {email}. Temporary password: {plain_password}",
+            )
+            return redirect('accounts:create_user')
 
         try:
             AuditLog.log(
@@ -360,8 +394,6 @@ def create_user(request):
             )
         except Exception:
             pass
-
-        return redirect('accounts:user_list')
 
     return render(request, 'accounts/create_user.html', {
         'roles': User.Role.choices,

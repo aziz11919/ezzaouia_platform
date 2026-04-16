@@ -87,9 +87,20 @@ def morning_suggestions_view(request):
 
 @login_required
 def new_session(request):
-    """Nettoyer les sessions vides et retourner à la page d'accueil — pas de création."""
+    """Clean empty sessions and redirect to chat, preserving doc_id if present."""
     _cleanup_empty_sessions(request.user)
+    doc_id = request.GET.get('doc_id', '').strip()
+    if doc_id.isdigit():
+        return redirect(f'/chatbot/?doc_id={doc_id}')
     return redirect('chatbot:chat')
+
+
+@login_required
+@require_GET
+def api_doc_info(request):
+    """GET /chatbot/doc-info/?doc_id=X — returns doc info for React pre-selection."""
+    docs = _preselected_docs(request)
+    return JsonResponse({'docs': docs})
 
 
 @login_required

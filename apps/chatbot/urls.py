@@ -24,4 +24,6 @@ urlpatterns = [
     # API JSON pour React
     path('sessions/',                              views.api_sessions,         name='api_sessions'),
     path('session/<int:session_id>/messages/',     views.api_session_messages, name='api_session_messages'),
+    path('api/stats/',                             stats_views.api_chatbot_stats, name='api_stats'),
+    path('doc-info/',                              views.api_doc_info,            name='doc_info'),
 ]

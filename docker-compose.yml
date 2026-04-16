@@ -21,6 +21,7 @@ services:
       - DJANGO_SETTINGS_MODULE=config.settings
       - MSSQL_ENCRYPT=no
       - MSSQL_TRUST_SERVER_CERTIFICATE=yes
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./media:/app/media

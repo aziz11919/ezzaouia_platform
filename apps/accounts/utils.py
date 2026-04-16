@@ -29,42 +29,20 @@ def generate_reset_token():
 
 def send_welcome_email(user, plain_password):
     """Send welcome email with temporary password."""
-    subject = "Your EZZAOUIA Platform Account"
+    subject = "Your EZZAOUIA Platform password"
 
-    message = f"""Dear {user.get_full_name() or user.username},
+    message = f"""Hello {user.username},
 
-Your account has been created on the EZZAOUIA Production Platform (MARETAP S.A.).
+Your account has been created on the EZZAOUIA Production Platform.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACCESS CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Platform URL : http://{settings.PLATFORM_HOST}/
 Username     : {user.username}
-Password     : {plain_password}
-Role         : {user.get_role_display()}
+Your temporary password is: {plain_password}
+
+Please change it after first login.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMPORTANT — FIRST LOGIN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You will be required to change your password
-immediately upon first login.
-
-Please choose a strong password that you have
-not used before.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECURITY NOTICE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This email contains confidential information.
-Do not forward or share your credentials.
-Access is restricted to MARETAP staff only.
-
-If you did not request this account, please
-contact your system administrator immediately.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MARETAP S.A. — EZZAOUIA Field
-CPF Zarzis, Tunisia
+EZZAOUIA Platform — MARETAP S.A.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 This is an automated message. Do not reply.

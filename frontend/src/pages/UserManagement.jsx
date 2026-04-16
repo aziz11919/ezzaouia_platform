@@ -69,7 +69,13 @@ export default function UserManagement() {
           </select>
           <button className="btn-primary" onClick={load}>Apply</button>
           <button className="btn-secondary" onClick={() => { setFilters({ q: '', role: '', active: '' }); setTimeout(load, 0) }}>Reset</button>
-          <button className="btn-primary" style={{ marginLeft: 'auto' }}>New user</button>
+          <button
+            className="btn-primary"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => { window.location.href = '/accounts/users/create/' }}
+          >
+            New user
+          </button>
         </div>
       </div>
 

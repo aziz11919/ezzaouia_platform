@@ -10,6 +10,7 @@ import AuditLog from './pages/AuditLog'
 import UserManagement from './pages/UserManagement'
 import Profile from './pages/Profile'
 import Reports from './pages/Reports'
+import Stats from './pages/Stats'
 import NotFound from './pages/NotFound'
 
 function LoadingGate() {
@@ -61,7 +62,7 @@ function AppRoutes() {
 
       <Route path="/ingestion" element={<RequireAuth><FileImport /></RequireAuth>} />
       <Route path="/ingestion/upload" element={<RequireAuth><FileImport /></RequireAuth>} />
-      <Route path="/ingestion/list" element={<RequireAuth><FileImport /></RequireAuth>} />
+      <Route path="/ingestion/list" element={<Navigate to="/bibliotheque" replace />} />
 
       <Route path="/bibliotheque" element={<RequireAuth><Library /></RequireAuth>} />
       <Route path="/audit/log" element={<RequireAuth><AuditLog /></RequireAuth>} />
@@ -69,6 +70,7 @@ function AppRoutes() {
       <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
       <Route path="/accounts/profile" element={<Navigate to="/profile" replace />} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
+      <Route path="/stats" element={<RequireAuth><Stats /></RequireAuth>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

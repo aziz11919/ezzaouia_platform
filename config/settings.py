@@ -196,14 +196,16 @@ ONEDRIVE_SYNC_DIR = config(
     default=r'C:\Users\Mega-PC\OneDrive - MARETAP SA\Attachments\aaaaa',
 )
 
-# ── Email — MARETAP internal Outlook ─────────────────────────────
+# ── Email — Office 365 / MARETAP Outlook ─────────────────────────
 EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST          = config('EMAIL_HOST',          default='smtp.maretap.tn')
-EMAIL_PORT          = config('EMAIL_PORT',          default=587, cast=int)
-EMAIL_USE_TLS       = True
-EMAIL_HOST_USER     = config('EMAIL_HOST_USER',     default='noreply@maretap.tn')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL  = 'EZZAOUIA Platform <noreply@maretap.tn>'
+EMAIL_HOST          = 'smtp.office365.com'
+EMAIL_PORT          = 587
+EMAIL_USE_TLS       = True   # STARTTLS on port 587
+EMAIL_USE_SSL       = False  # mutual exclusion with TLS — never use port 465
+EMAIL_HOST_USER     = 'aziz.stage@maretap.tn'
+EMAIL_HOST_PASSWORD = config('EMAIL_PASSWORD', default='')  # set EMAIL_PASSWORD in .env
+DEFAULT_FROM_EMAIL  = 'EZZAOUIA Platform <aziz.stage@maretap.tn>'
+EMAIL_TIMEOUT       = 30
 
 # Platform base URL used in emails
 PLATFORM_HOST = config('PLATFORM_HOST', default='192.168.87.x:8000')

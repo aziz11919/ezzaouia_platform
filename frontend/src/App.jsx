@@ -12,6 +12,12 @@ import Profile from './pages/Profile'
 import Reports from './pages/Reports'
 import Stats from './pages/Stats'
 import NotFound from './pages/NotFound'
+import ChangePassword from './pages/ChangePassword'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import CreateUser from './pages/CreateUser'
+import EditUser from './pages/EditUser'
+import SharedSession from './pages/SharedSession'
 
 function LoadingGate() {
   return (
@@ -67,10 +73,17 @@ function AppRoutes() {
       <Route path="/bibliotheque" element={<RequireAuth><Library /></RequireAuth>} />
       <Route path="/audit/log" element={<RequireAuth><AuditLog /></RequireAuth>} />
       <Route path="/accounts/users" element={<RequireAuth><UserManagement /></RequireAuth>} />
+      <Route path="/accounts/users/create" element={<RequireAuth><CreateUser /></RequireAuth>} />
+      <Route path="/accounts/users/:userId/edit" element={<RequireAuth><EditUser /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
       <Route path="/accounts/profile" element={<Navigate to="/profile" replace />} />
+      <Route path="/accounts/change-password" element={<RequireAuth><ChangePassword /></RequireAuth>} />
+      <Route path="/accounts/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+      <Route path="/accounts/reset-password/:token" element={<PublicOnly><ResetPassword /></PublicOnly>} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><Stats /></RequireAuth>} />
+      <Route path="/chatbot/stats" element={<RequireAuth><Stats /></RequireAuth>} />
+      <Route path="/chatbot/shared/:token" element={<SharedSession />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

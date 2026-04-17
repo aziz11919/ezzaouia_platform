@@ -11,4 +11,11 @@ export const authAPI = {
   listUsers: (params = {}) => api.get(`${AUTH_BASE}/users-api/`, { params }),
   toggleUser: (userId) => api.post(`${AUTH_BASE}/users-api/${userId}/toggle/`),
   deleteUser: (userId) => api.post(`${AUTH_BASE}/users-api/${userId}/delete/`),
+  forgotPassword: (data) => api.post(`${AUTH_BASE}/api-forgot-password/`, data),
+  validateResetToken: (token) => api.get(`${AUTH_BASE}/api-reset-password/${token}/`),
+  resetPassword: (token, data) => api.post(`${AUTH_BASE}/api-reset-password/${token}/`, data),
+  createUser: (data) => api.post(`${AUTH_BASE}/api-create-user/`, data),
+  getUser: (userId) => api.get(`${AUTH_BASE}/users-api/${userId}/detail/`),
+  editUser: (userId, data) => api.post(`${AUTH_BASE}/users-api/${userId}/edit/`, data),
+  adminResetPassword: (userId, data) => api.post(`${AUTH_BASE}/users-api/${userId}/reset-password/`, data),
 }

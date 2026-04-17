@@ -14,7 +14,9 @@
       "Bash(docker cp *)",
       "Bash(docker exec *)",
       "Bash(docker restart *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Read(//tmp/**)",
+      "Bash(xargs ls *)"
     ]
   }
 }

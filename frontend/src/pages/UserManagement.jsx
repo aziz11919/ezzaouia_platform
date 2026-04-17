@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout/Layout'
 import { authAPI } from '../api/auth'
 
 export default function UserManagement() {
+  const navigate = useNavigate()
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [stats, setStats] = useState({ total: 0, actifs: 0, admins: 0, ingenieurs: 0, directions: 0 })
@@ -72,7 +73,7 @@ export default function UserManagement() {
           <button
             className="btn-primary"
             style={{ marginLeft: 'auto' }}
-            onClick={() => { window.location.href = '/accounts/users/create/' }}
+            onClick={() => navigate('/accounts/users/create')}
           >
             New user
           </button>
@@ -119,6 +120,9 @@ export default function UserManagement() {
                 <td>{u.last_login || 'Never'}</td>
                 <td style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <button className="btn-secondary" style={{ height: 30, padding: '0 10px' }} onClick={() => navigate(`/accounts/users/${u.id}/edit`)}>
+                      Edit
+                    </button>
                     <button className="btn-secondary" style={{ height: 30, padding: '0 10px' }} onClick={() => toggleUser(u.id)}>
                       {u.is_active ? 'Disable' : 'Enable'}
                     </button>

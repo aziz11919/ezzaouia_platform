@@ -546,33 +546,45 @@ def share_session(request, session_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 def shared_session_view(request, token):
-    """Afficher une session partagée en lecture seule."""
-    session = get_object_or_404(
-        ChatSession.objects.select_related('user'),
-        share_token=token,
-        is_shared=True,
-    )
+    """Afficher une session partagée — React SPA (public)."""
+    return serve_react(request)
 
-    is_owner = session.user_id == request.user.id
-    is_shared_with_user = SessionShare.objects.filter(
-        session=session,
-        shared_with=request.user,
-    ).exists()
 
-    if not (is_owner or is_shared_with_user or getattr(request.user, 'is_admin', False)):
-        django_messages.error(request, "Unauthorized access.")
-        return redirect('chatbot:chat')
+@require_GET
+def api_shared_session(request, token):
+    """GET /chatbot/api/shared/<token>/ — public shared session data for React."""
+    try:
+        session = ChatSession.objects.select_related('user').get(
+            share_token=token,
+            is_shared=True,
+        )
+    except ChatSession.DoesNotExist:
+        return JsonResponse({'error': 'Session not found or not shared.'}, status=404)
 
-    if is_shared_with_user:
+    if request.user.is_authenticated:
         SessionShare.objects.filter(session=session, shared_with=request.user).update(viewed=True)
 
-    context = {
-        'session': session,
-        'messages': session.messages.order_by('created_at'),
-    }
-    return render(request, 'chatbot/shared_session.html', context)
+    msgs = session.messages.order_by('created_at')
+    user = session.user
+    display_name = user.get_full_name() or user.username
+
+    return JsonResponse({
+        'session': {
+            'title':       session.title or 'Shared session',
+            'user':        {'username': user.username, 'display_name': display_name},
+            'shared_at':   session.shared_at.strftime('%d/%m/%Y %H:%M') if session.shared_at else '',
+        },
+        'messages': [
+            {
+                'question':   m.question,
+                'answer':     m.answer or '',
+                'duration':   float(getattr(m, 'duration', 0) or 0),
+                'created_at': m.created_at.strftime('%d/%m/%Y %H:%M'),
+            }
+            for m in msgs
+        ],
+    })
 
 
 # ── API JSON pour React frontend ─────────────────────────────────

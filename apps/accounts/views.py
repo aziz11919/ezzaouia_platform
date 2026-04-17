@@ -12,7 +12,7 @@ from django.conf import settings
 from datetime import timedelta
 from functools import wraps
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from apps.audit.models import AuditLog
 from apps.core.views import serve_react
 from .models import User
@@ -270,6 +270,8 @@ def user_create(request):
 
 @admin_required
 def user_edit(request, user_id):
+    return serve_react(request)
+
     from .forms import UserEditForm, SetPasswordForm
     target = get_object_or_404(User, id=user_id)
 
@@ -315,22 +317,15 @@ def user_toggle(request, user_id):
 
 @admin_required
 def user_delete(request, user_id):
-    target = get_object_or_404(User, id=user_id)
-    if target == request.user:
-        messages.error(request, "You cannot delete your own account.")
-        return redirect('accounts:user_list')
-    if request.method == 'POST':
-        name = target.get_full_name() or target.username
-        target.delete()
-        messages.success(request, f"User '{name}' deleted.")
-        return redirect('accounts:user_list')
-    return render(request, 'accounts/user_confirm_delete.html', {'target_user': target})
+    return serve_react(request)
 
 
 # ── New user creation with email ─────────────────────────────────
 
 @admin_required
 def create_user(request):
+    return serve_react(request)
+
     if request.method == 'POST':
         username   = request.POST.get('username', '').strip()
         first_name = request.POST.get('first_name', '').strip()
@@ -404,6 +399,8 @@ def create_user(request):
 
 @login_required
 def change_password(request):
+    return serve_react(request)
+
     is_forced = request.session.get('force_change_password', False)
 
     if request.method == 'POST':
@@ -454,6 +451,8 @@ def change_password(request):
 # ── Forgot password ───────────────────────────────────────────────
 
 def forgot_password(request):
+    return serve_react(request)
+
     if request.method == 'POST':
         email = request.POST.get('email', '').strip()
         success_message = (
@@ -481,6 +480,8 @@ def forgot_password(request):
 # ── Reset password via token ──────────────────────────────────────
 
 def reset_password(request, token):
+    return serve_react(request)
+
     try:
         user = User.objects.get(
             password_reset_token=token,
@@ -802,4 +803,266 @@ def api_user_delete(request, user_id):
         return JsonResponse({'error': 'You cannot delete your own account.'}, status=400)
 
     target.delete()
+    return JsonResponse({'success': True})
+
+
+# ── New JSON API endpoints for React migration ────────────────────
+
+@require_http_methods(["POST"])
+def api_forgot_password(request):
+    """POST /accounts/api-forgot-password/ — JSON forgot password."""
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    email = data.get('email', '').strip()
+    if not email:
+        return JsonResponse({'errors': ['Email is required.']}, status=400)
+
+    success_message = (
+        "If this email is registered, you will receive "
+        "a password reset link shortly."
+    )
+    try:
+        user = User.objects.get(email=email)
+        token = generate_reset_token()
+        expires = timezone.now() + timedelta(hours=1)
+        user.password_reset_token = token
+        user.password_reset_expires = expires
+        user.save(update_fields=['password_reset_token', 'password_reset_expires'])
+        send_password_reset_email(user, token)
+    except User.DoesNotExist:
+        pass
+
+    return JsonResponse({'success': True, 'message': success_message})
+
+
+@require_http_methods(["GET", "POST"])
+def api_reset_password(request, token):
+    """GET /accounts/api-reset-password/<token>/ — validate token.
+       POST /accounts/api-reset-password/<token>/ — set new password."""
+    if request.method == 'GET':
+        try:
+            User.objects.get(
+                password_reset_token=token,
+                password_reset_expires__gt=timezone.now(),
+            )
+            return JsonResponse({'valid': True})
+        except User.DoesNotExist:
+            return JsonResponse(
+                {'valid': False, 'error': 'This reset link is invalid or has expired.'},
+                status=400,
+            )
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    try:
+        user = User.objects.get(
+            password_reset_token=token,
+            password_reset_expires__gt=timezone.now(),
+        )
+    except User.DoesNotExist:
+        return JsonResponse(
+            {'error': 'This reset link is invalid or has expired.'},
+            status=400,
+        )
+
+    new_password = data.get('new_password', '')
+    confirm_password = data.get('confirm_password', '')
+
+    errors = []
+    if new_password != confirm_password:
+        errors.append('Passwords do not match.')
+    if len(new_password) < 8:
+        errors.append('Password must be at least 8 characters.')
+    if not any(c.isupper() for c in new_password):
+        errors.append('Password must contain at least one uppercase letter.')
+    if not any(c.isdigit() for c in new_password):
+        errors.append('Password must contain at least one number.')
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
+
+    user.set_password(new_password)
+    user.must_change_password = False
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    user.last_password_change = timezone.now()
+    user.save()
+    send_password_changed_email(user)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def api_create_user(request):
+    """POST /accounts/api-create-user/ — JSON create user (admin only)."""
+    if not getattr(request.user, 'is_admin', False):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    username   = data.get('username', '').strip()
+    first_name = data.get('first_name', '').strip()
+    last_name  = data.get('last_name', '').strip()
+    email      = data.get('email', '').strip()
+    role       = data.get('role', '')
+    department = data.get('department', '').strip()
+    phone      = data.get('phone', '').strip()
+
+    errors = []
+    if not username:
+        errors.append('Username is required.')
+    elif User.objects.filter(username=username).exists():
+        errors.append('Username already exists.')
+    if not email:
+        errors.append('Email is required to send password.')
+    elif User.objects.filter(email=email).exists():
+        errors.append('Email already in use.')
+    elif not email.endswith('@maretap.tn'):
+        errors.append('Email must be a MARETAP email (@maretap.tn).')
+    if role not in [r[0] for r in User.Role.choices]:
+        errors.append('Invalid role selected.')
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
+
+    plain_password = generate_random_password()
+    new_user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=plain_password,
+        first_name=first_name,
+        last_name=last_name,
+    )
+    new_user.role = role
+    new_user.department = department
+    new_user.phone = phone
+    new_user.must_change_password = True
+    new_user.save()
+
+    email_sent = send_password_email(new_user, plain_password)
+    message = (
+        f"User {username} created. Password sent to {email}."
+        if email_sent
+        else f"User created but email failed. Temporary password: {plain_password}"
+    )
+
+    try:
+        AuditLog.log(
+            action='CREATE_USER',
+            user=request.user,
+            request=request,
+            details={'created_user': username, 'role': role},
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'success': True, 'message': message, 'email_sent': email_sent})
+
+
+@login_required
+@require_GET
+def api_get_user(request, user_id):
+    """GET /accounts/users-api/<id>/detail/ — single user data for React edit form."""
+    if not getattr(request.user, 'is_admin', False):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    target = get_object_or_404(User, id=user_id)
+    return JsonResponse({
+        'id':          target.id,
+        'username':    target.username,
+        'first_name':  target.first_name,
+        'last_name':   target.last_name,
+        'email':       target.email,
+        'role':        target.role,
+        'department':  getattr(target, 'department', ''),
+        'phone':       getattr(target, 'phone', ''),
+        'is_active':   bool(target.is_active),
+        'is_self':     target.id == request.user.id,
+        'date_joined': target.date_joined.strftime('%d/%m/%Y') if target.date_joined else '',
+        'last_login':  target.last_login.strftime('%d/%m/%Y %H:%M') if target.last_login else 'Never',
+        'roles':       [{'value': v, 'label': l} for v, l in User.Role.choices],
+    })
+
+
+@login_required
+@require_POST
+def api_edit_user(request, user_id):
+    """POST /accounts/users-api/<id>/edit/ — JSON edit user (admin only)."""
+    if not getattr(request.user, 'is_admin', False):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    target   = get_object_or_404(User, id=user_id)
+    username = data.get('username', '').strip()
+    email    = data.get('email', '').strip()
+
+    errors = []
+    if not username:
+        errors.append('Username is required.')
+    elif User.objects.filter(username=username).exclude(pk=target.pk).exists():
+        errors.append('Username already taken.')
+    if email and not email.endswith('@maretap.tn'):
+        errors.append('Email must be a MARETAP email (@maretap.tn).')
+    elif email and User.objects.filter(email=email).exclude(pk=target.pk).exists():
+        errors.append('Email already in use.')
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
+
+    target.username   = username
+    target.first_name = data.get('first_name', '').strip()
+    target.last_name  = data.get('last_name', '').strip()
+    target.email      = email
+    target.role       = data.get('role', target.role)
+    target.department = data.get('department', '').strip()
+    target.phone      = data.get('phone', '').strip()
+    if target.id != request.user.id:
+        target.is_active = bool(data.get('is_active', target.is_active))
+    target.save()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def api_admin_reset_password(request, user_id):
+    """POST /accounts/users-api/<id>/reset-password/ — admin resets user's password."""
+    if not getattr(request.user, 'is_admin', False):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    target   = get_object_or_404(User, id=user_id)
+    password = data.get('password', '')
+    confirm  = data.get('password_confirm', '')
+
+    errors = []
+    if not password:
+        errors.append('Password is required.')
+    elif password != confirm:
+        errors.append('Passwords do not match.')
+    elif len(password) < 8:
+        errors.append('Password must be at least 8 characters.')
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
+
+    target.set_password(password)
+    target.must_change_password = True
+    target.save()
     return JsonResponse({'success': True})

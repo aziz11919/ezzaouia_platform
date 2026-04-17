@@ -26,4 +26,5 @@ urlpatterns = [
     path('session/<int:session_id>/messages/',     views.api_session_messages, name='api_session_messages'),
     path('api/stats/',                             stats_views.api_chatbot_stats, name='api_stats'),
     path('doc-info/',                              views.api_doc_info,            name='doc_info'),
+    path('api/shared/<str:token>/',                views.api_shared_session,      name='api_shared_session'),
 ]

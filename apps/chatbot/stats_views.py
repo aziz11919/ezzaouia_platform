@@ -30,6 +30,8 @@ def _safe_float(value, default=0.0):
 
 @login_required
 def chatbot_stats(request):
+    return serve_react(request)
+
     if getattr(request.user, "role", None) != "admin":
         messages.error(request, "Access is restricted to administrators.")
         return redirect("dashboard:home")

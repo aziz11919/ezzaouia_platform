@@ -183,7 +183,7 @@ REST_FRAMEWORK = {
 
 # ── Configuration IA / RAG ────────────────────────────────────────
 OLLAMA_BASE_URL = config('OLLAMA_BASE_URL', default='http://127.0.0.1:11434')
-OLLAMA_MODEL    = config('OLLAMA_MODEL',    default='llama3')
+OLLAMA_MODEL    = config('OLLAMA_MODEL',    default='llama3.1:8b')
 CHROMA_PERSIST_DIR = config('CHROMA_PERSIST_DIR', default=str(BASE_DIR / 'chroma_db'))
 
 # ── Upload fichiers ───────────────────────────────────────────────

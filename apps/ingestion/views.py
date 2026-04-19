@@ -169,8 +169,11 @@ def api_file_status(request, file_id):
         f = UploadedFile.objects.get(id=file_id, uploaded_by=request.user)
     except UploadedFile.DoesNotExist:
         return JsonResponse({'error': 'Not found.'}, status=404)
-    return JsonResponse({
+    response = {
         'id':     f.id,
         'status': f.status,
         'error':  getattr(f, 'error_message', '') or '',
-    })
+    }
+    if f.status == 'rejected':
+        response['reason'] = getattr(f, 'error_msg', 'Document not related to petroleum/MARETAP')
+    return JsonResponse(response)

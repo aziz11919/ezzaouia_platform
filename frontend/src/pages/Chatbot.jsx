@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Chart, registerables } from 'chart.js'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -164,7 +165,77 @@ function BotMessage({ msg, initials, onSuggest }) {
             ? <span style={{ color: 'var(--red)' }}>{msg.answer}</span>
             : msg.stopped
             ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Generation stopped.</span>
-            : <ReactMarkdown>{msg.answer || ''}</ReactMarkdown>
+            : <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({node, ...props}) => (
+                    <table style={{
+                      borderCollapse: 'collapse',
+                      width: '100%',
+                      margin: '12px 0',
+                      fontSize: '13px'
+                    }} {...props} />
+                  ),
+                  th: ({node, ...props}) => (
+                    <th style={{
+                      padding: '8px 12px',
+                      borderBottom: '2px solid var(--gold)',
+                      textAlign: 'left',
+                      color: 'var(--gold)',
+                      fontWeight: '600'
+                    }} {...props} />
+                  ),
+                  td: ({node, ...props}) => (
+                    <td style={{
+                      padding: '7px 12px',
+                      borderBottom: '1px solid var(--border-soft)'
+                    }} {...props} />
+                  ),
+                  strong: ({node, ...props}) => (
+                    <strong style={{color: 'var(--gold-light)'}} {...props} />
+                  ),
+                  h2: ({node, ...props}) => (
+                    <h2 style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: 'var(--gold)',
+                      margin: '16px 0 8px',
+                      fontFamily: 'Rajdhani, sans-serif'
+                    }} {...props} />
+                  ),
+                  h3: ({node, ...props}) => (
+                    <h3 style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: 'var(--text)',
+                      margin: '12px 0 6px'
+                    }} {...props} />
+                  ),
+                  blockquote: ({node, ...props}) => (
+                    <blockquote style={{
+                      borderLeft: '3px solid var(--gold)',
+                      paddingLeft: '12px',
+                      margin: '8px 0',
+                      color: 'var(--text-muted)',
+                      fontStyle: 'italic'
+                    }} {...props} />
+                  ),
+                  ul: ({node, ...props}) => (
+                    <ul style={{paddingLeft: '20px', margin: '6px 0'}} {...props} />
+                  ),
+                  li: ({node, ...props}) => (
+                    <li style={{margin: '3px 0', lineHeight: '1.6'}} {...props} />
+                  ),
+                  hr: ({node, ...props}) => (
+                    <hr style={{border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0'}} {...props} />
+                  ),
+                  em: ({node, ...props}) => (
+                    <em style={{color: 'var(--text-dim)', fontSize: '12px'}} {...props} />
+                  ),
+                }}
+              >
+                {msg.answer || ''}
+              </ReactMarkdown>
           }
         </div>
 

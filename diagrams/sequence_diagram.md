@@ -14,7 +14,7 @@ sequenceDiagram
     participant CEL as Celery Worker
     participant CHR as ChromaDB
     participant LLM as Ollama LLM (llama3)
-
+    
     %% ═══════════════════════════════════════════════════
     %% 1. AUTHENTICATION FLOW
     %% ═══════════════════════════════════════════════════

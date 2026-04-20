@@ -7,7 +7,7 @@ import Top5Chart from '../components/Charts/Top5Chart'
 import { kpisAPI } from '../api/kpis'
 
 const CURRENT_YEAR = new Date().getFullYear()
-const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
+const YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR]
 
 function toMonthShort(label) {
   if (!label) return ''
@@ -15,7 +15,7 @@ function toMonthShort(label) {
 }
 
 export default function Dashboard() {
-  const [year, setYear] = useState(YEARS[0])
+  const [year, setYear] = useState(CURRENT_YEAR)
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState(null)
   const [trend, setTrend] = useState([])
@@ -57,7 +57,7 @@ export default function Dashboard() {
   return (
     <Layout title="Overview" breadcrumb="EZZAOUIA Field - CPF Zarzis">
       <div className="year-selector">
-        <span className="year-label">Annee</span>
+        <span className="year-label">YEAR</span>
         {YEARS.map((y) => (
           <button key={y} type="button" className={`year-btn${y === year ? ' active' : ''}`} onClick={() => setYear(y)}>
             {y}

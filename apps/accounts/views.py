@@ -917,6 +917,8 @@ def api_create_user(request):
     department = data.get('department', '').strip()
     phone      = data.get('phone', '').strip()
 
+    allowed_domain = getattr(settings, 'USER_EMAIL_DOMAIN', '@maretap.tn')
+
     errors = []
     if not username:
         errors.append('Username is required.')
@@ -926,12 +928,16 @@ def api_create_user(request):
         errors.append('Email is required to send password.')
     elif User.objects.filter(email=email).exists():
         errors.append('Email already in use.')
-    elif not email.endswith('@maretap.tn'):
-        errors.append('Email must be a MARETAP email (@maretap.tn).')
+    elif allowed_domain and not email.endswith(allowed_domain):
+        errors.append(f'Email must be a company email ({allowed_domain}).')
     if role not in [r[0] for r in User.Role.choices]:
-        errors.append('Invalid role selected.')
+        errors.append(f'Invalid role "{role}". Valid roles: {[r[0] for r in User.Role.choices]}')
 
     if errors:
+        logger.warning(
+            "api_create_user 400 — user=%s payload={username=%r, email=%r, role=%r} errors=%s",
+            request.user.username, username, email, role, errors,
+        )
         return JsonResponse({'errors': errors}, status=400)
 
     plain_password = generate_random_password()

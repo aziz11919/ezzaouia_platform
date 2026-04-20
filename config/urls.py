@@ -5,8 +5,9 @@ from django.views.static import serve
 
 from apps.audit import views as audit_views
 from apps.bibliotheque import views as bibliotheque_views
-from apps.dashboard import powerbi_views
+from apps.core.powerbi_views import powerbi_reports
 from apps.core.views import serve_react
+from apps.dashboard import powerbi_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -22,6 +23,7 @@ urlpatterns = [
     path('api/library/documents/', bibliotheque_views.api_documents, name='api_library_documents'),
     path('api/library/documents/<int:pk>/delete/', bibliotheque_views.api_delete_document, name='api_library_delete'),
     path('api/audit/logs/', audit_views.api_logs, name='api_audit_logs'),
+    path('api/powerbi/reports/', powerbi_reports, name='api_powerbi_reports'),
     path('api/powerbi/', powerbi_views.api_powerbi_list, name='api_powerbi_list'),
     path('api/powerbi/<int:pk>/', powerbi_views.api_powerbi_detail, name='api_powerbi_detail'),
     re_path(r'^media/(?P<path>.+)$', serve, {'document_root': settings.MEDIA_ROOT}),

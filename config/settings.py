@@ -56,6 +56,7 @@ MIDDLEWARE = [
     'apps.accounts.middleware.SessionTimeoutMiddleware',
     'apps.accounts.middleware.ForcePasswordChangeMiddleware',
     'apps.audit.middleware.AuditMiddleware',
+    'apps.core.middleware.ContentSecurityPolicyMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

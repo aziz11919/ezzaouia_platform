@@ -18,7 +18,7 @@ import ResetPassword from './pages/ResetPassword'
 import CreateUser from './pages/CreateUser'
 import EditUser from './pages/EditUser'
 import SharedSession from './pages/SharedSession'
-import PowerBIIndex from './components/PowerBIIndex'
+import PowerBI from './pages/PowerBI'
 import PowerBIReport from './components/PowerBIReport'
 
 function LoadingGate() {
@@ -82,7 +82,7 @@ function AppRoutes() {
       <Route path="/accounts/change-password" element={<RequireAuth><ChangePassword /></RequireAuth>} />
       <Route path="/accounts/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
       <Route path="/accounts/reset-password/:token" element={<PublicOnly><ResetPassword /></PublicOnly>} />
-      <Route path="/powerbi" element={<RequireAuth><PowerBIIndex /></RequireAuth>} />
+      <Route path="/powerbi" element={<RequireAuth><PowerBI /></RequireAuth>} />
       <Route path="/powerbi/:id" element={<RequireAuth><PowerBIReport /></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><Stats /></RequireAuth>} />

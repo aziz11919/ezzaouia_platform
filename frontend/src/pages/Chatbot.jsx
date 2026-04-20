@@ -806,12 +806,7 @@ export default function Chatbot() {
               </svg>
               Library
             </Link>
-            <div className="model-badge">
-              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5"/>
-              </svg>
-              llama3
-            </div>
+           
             <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
               {isDark ? (
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">

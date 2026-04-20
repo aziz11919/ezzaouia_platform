@@ -303,18 +303,6 @@ html[data-theme="dark"] .chatbot-page .logo-img {
 }
 .chatbot-page .topbar-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
 
-.chatbot-page .model-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: var(--dark3);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
 .chatbot-page .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 .chatbot-page .topbar-link {

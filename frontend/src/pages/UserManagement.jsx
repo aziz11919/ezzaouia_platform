@@ -7,7 +7,7 @@ export default function UserManagement() {
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
-  const [stats, setStats] = useState({ total: 0, actifs: 0, admins: 0, ingenieurs: 0, directions: 0 })
+  const [stats, setStats] = useState({ total: 0, actifs: 0, admins: 0, users: 0 })
   const [filters, setFilters] = useState({ q: '', role: '', active: '' })
 
   async function load() {
@@ -15,7 +15,7 @@ export default function UserManagement() {
       const res = await authAPI.listUsers(filters)
       setUsers(res.data?.results || [])
       setRoles(res.data?.roles || [])
-      setStats(res.data?.stats || { total: 0, actifs: 0, admins: 0, ingenieurs: 0, directions: 0 })
+      setStats(res.data?.stats || { total: 0, actifs: 0, admins: 0, users: 0 })
     } catch {
       setUsers([])
     }
@@ -47,7 +47,7 @@ export default function UserManagement() {
         <div className="page-panel"><div className="kpi-label">Total accounts</div><div className="kpi-value v-gold" style={{ marginBottom: 0, fontSize: 26 }}>{stats.total}</div></div>
         <div className="page-panel"><div className="kpi-label">Active accounts</div><div className="kpi-value v-green" style={{ marginBottom: 0, fontSize: 26 }}>{stats.actifs}</div></div>
         <div className="page-panel"><div className="kpi-label">Administrators</div><div className="kpi-value v-gold" style={{ marginBottom: 0, fontSize: 26 }}>{stats.admins}</div></div>
-        <div className="page-panel"><div className="kpi-label">Engineers</div><div className="kpi-value v-blue" style={{ marginBottom: 0, fontSize: 26 }}>{stats.ingenieurs}</div></div>
+        <div className="page-panel"><div className="kpi-label">Users</div><div className="kpi-value v-blue" style={{ marginBottom: 0, fontSize: 26 }}>{stats.users}</div></div>
       </div>
 
       <div className="page-panel" style={{ marginBottom: 20 }}>

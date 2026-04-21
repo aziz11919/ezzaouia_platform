@@ -29,7 +29,7 @@ def _clean_year_month(raw_year, raw_month):
 
 @login_required
 def generate_report(request):
-    allowed_roles = {"admin", "direction", "ingenieur"}
+    allowed_roles = {"admin", "user"}
     role = getattr(request.user, "role", "")
     if role not in allowed_roles:
         return HttpResponseForbidden("Unauthorized access.")

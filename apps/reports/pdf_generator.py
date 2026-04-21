@@ -60,13 +60,13 @@ class EzzaouiaReportGenerator:
         self.ranking_rows = self._safe_ranking_rows(self.year, self.month)
         self.trend_rows = self._safe_trend_rows(self.year)
 
-        pages = [self._draw_cover_page]
-        if self.role in {"direction", "admin"}:
-            pages.append(self._draw_executive_page)
-        pages.append(self._draw_wells_page)
-        if self.role == "ingenieur":
-            pages.append(self._draw_trend_page)
-        pages.append(self._draw_anomalies_page)
+        pages = [
+            self._draw_cover_page,
+            self._draw_executive_page,
+            self._draw_wells_page,
+            self._draw_trend_page,
+            self._draw_anomalies_page,
+        ]
 
         total_pages = len(pages)
         for index, draw_page in enumerate(pages, start=1):

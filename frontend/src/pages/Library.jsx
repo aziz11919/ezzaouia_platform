@@ -33,7 +33,7 @@ export default function Library() {
       setStats(res.data?.stats || { total: 0, pdf: 0, docx: 0, xlsx: 0, total_size_human: '0 B' })
       setAvailableYears(res.data?.available_years || [])
       setAvailableWells(res.data?.wells || [])
-      setUploaders(res.data?.uploaders || [])
+      setUploaders([...new Set((res.data?.uploaders || []).filter(Boolean))])
       setPage(1)
     } catch {
       setDocuments([])

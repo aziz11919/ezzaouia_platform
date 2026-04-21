@@ -79,11 +79,8 @@ def role_required(*roles):
 def admin_required(view_func):
     return role_required('admin')(view_func)
 
-def ingenieur_required(view_func):
-    return role_required('admin', 'ingenieur')(view_func)
-
-def direction_required(view_func):
-    return role_required('admin', 'direction')(view_func)
+def user_required(view_func):
+    return role_required('admin', 'user')(view_func)
 
 
 # ── Authentification ─────────────────────────────────────────────
@@ -208,7 +205,8 @@ def user_list(request):
     if request.method == 'GET':
         return serve_react(request)
 
-    qs = User.objects.all().order_by('username')
+    _exclude = ['AnonymousUser', 'anonymous']
+    qs = User.objects.exclude(username__in=_exclude).order_by('username')
 
     search = request.GET.get('q', '').strip()
     if search:
@@ -230,13 +228,12 @@ def user_list(request):
     elif active_filter == '0':
         qs = qs.filter(is_active=False)
 
-    all_users = User.objects.all()
+    all_users = User.objects.exclude(username__in=_exclude)
     stats = {
         'total':      all_users.count(),
         'actifs':     all_users.filter(is_active=True).count(),
-        'admins':     all_users.filter(role=User.Role.ADMIN).count(),
-        'ingenieurs': all_users.filter(role=User.Role.INGENIEUR).count(),
-        'directions': all_users.filter(role=User.Role.DIRECTION).count(),
+        'admins': all_users.filter(role=User.Role.ADMIN).count(),
+        'users':  all_users.filter(role=User.Role.USER).count(),
     }
 
     return render(request, 'accounts/users_list.html', {
@@ -259,7 +256,7 @@ def user_create(request):
             messages.success(request, f"User '{user.username}' created successfully.")
             return redirect('accounts:user_list')
     else:
-        form = UserCreateForm(initial={'is_active': True, 'role': User.Role.INGENIEUR})
+        form = UserCreateForm(initial={'is_active': True, 'role': User.Role.USER})
 
     return render(request, 'accounts/user_form.html', {
         'form':   form,
@@ -726,7 +723,8 @@ def api_users(request):
     if not getattr(request.user, 'is_admin', False):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
-    qs = User.objects.all().order_by('username')
+    _exclude = ['AnonymousUser', 'anonymous']
+    qs = User.objects.exclude(username__in=_exclude).order_by('username')
 
     search = request.GET.get('q', '').strip()
     if search:
@@ -748,13 +746,12 @@ def api_users(request):
     elif active_filter == '0':
         qs = qs.filter(is_active=False)
 
-    all_users = User.objects.all()
+    all_users = User.objects.exclude(username__in=_exclude)
     stats = {
         'total': all_users.count(),
         'actifs': all_users.filter(is_active=True).count(),
         'admins': all_users.filter(role=User.Role.ADMIN).count(),
-        'ingenieurs': all_users.filter(role=User.Role.INGENIEUR).count(),
-        'directions': all_users.filter(role=User.Role.DIRECTION).count(),
+        'users':  all_users.filter(role=User.Role.USER).count(),
     }
 
     payload = []
@@ -971,7 +968,7 @@ def api_create_user(request):
     except Exception:
         pass
 
-    return JsonResponse({'success': True, 'message': message, 'email_sent': email_sent})
+    return JsonResponse({'success': True, 'message': message, 'email_sent': email_sent, 'temp_password': plain_password})
 
 
 @login_required

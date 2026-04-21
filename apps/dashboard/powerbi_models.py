@@ -2,15 +2,13 @@ from django.db import models
 
 
 class PowerBIReport(models.Model):
-    ROLE_ALL        = 'all'
-    ROLE_ADMIN      = 'admin'
-    ROLE_INGENIEUR  = 'ingenieur'
-    ROLE_DIRECTION  = 'direction'
+    ROLE_ALL   = 'all'
+    ROLE_ADMIN = 'admin'
+    ROLE_USER  = 'user'
     ROLE_CHOICES = [
-        (ROLE_ALL,       'All roles'),
-        (ROLE_ADMIN,     'Admin only'),
-        (ROLE_INGENIEUR, 'Ingénieur'),
-        (ROLE_DIRECTION, 'Direction'),
+        (ROLE_ALL,   'All roles'),
+        (ROLE_ADMIN, 'Admin only'),
+        (ROLE_USER,  'User'),
     ]
 
     title       = models.CharField(max_length=200)

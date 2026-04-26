@@ -1,169 +1,413 @@
 """
-Calcul des KPIs pétroliers depuis FactDailyProduction et FactWellTest.
+Calcul des KPIs pétroliers — SQL brut pour compatibilité SQL Server (mssql-django).
+
+Toutes les requêtes utilisent connection.cursor() avec du SQL natif T-SQL
+pour éviter les incompatibilités ORM/mssql-django (mots réservés Year/Month,
+AVG sur INT, FK traversal dans aggregate, etc.).
 """
 import logging
-from django.db.models import Sum, Avg, Max, Min, F, Q
-from django.db.models.functions import TruncMonth, TruncYear
-from apps.warehouse.models import (
-    FactDailyProduction, FactWellTest, DimWell, DimDate
-)
+from django.db import connection
 
 logger = logging.getLogger('apps')
 
 
+def _safe_float(val, decimals=2):
+    try:
+        return round(float(val), decimals) if val is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_int(val):
+    try:
+        return int(val) if val is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+# ─── 1. FIELD SUMMARY ────────────────────────────────────────────
 def get_field_production_summary(year=None, month=None):
     """
     Production totale du champ EZZAOUIA.
-    Retourne : huile, eau, gaz, BSW moyen, GOR moyen.
+    Sans filtre : KPIs du dernier jour disponible.
+    Avec year/month : KPIs sur la période demandée.
     """
-    qs = FactDailyProduction.objects.all()
+    try:
+        where_clauses = []
+        params = []
 
-    if year:
-        qs = qs.filter(datekey__year=year)
-    if month:
-        qs = qs.filter(datekey__month=month)
-
-    result = qs.aggregate(
-        total_oil_stbd   = Sum('dailyoilprodstbd'),
-        total_water_blsd = Sum('dailywaterprodblsd'),
-        total_gas_mscf   = Sum('dailygasprodmscf'),
-        avg_bsw          = Avg('bsw'),
-        avg_gor          = Avg('gorscfstb'),
-        avg_prodhours    = Avg('prodhours'),
-        total_lifting    = Sum('lifting'),
-        total_sales      = Sum('sales'),
-    )
-
-    # Calculer BOPD moyen (production journalière moyenne)
-    count = qs.values('datekey').distinct().count()
-    result['avg_bopd'] = round(
-        result['total_oil_stbd'] / count, 1
-    ) if count and result['total_oil_stbd'] else 0
-
-    # Arrondir les valeurs
-    for key in result:
-        if result[key] is not None:
-            result[key] = round(float(result[key]), 2)
+        if year is None and month is None:
+            # Sans filtre : avg_bopd/total_oil sur le dernier jour avec huile,
+            # avg_bsw/avg_gor/avg_prodhours sur le dernier jour avec BSW > 0
+            # (ces deux jours peuvent différer quand le dernier jour de prod n'a
+            #  pas encore de données DimWellStatus renseignées).
+            sql = """
+                SELECT
+                    AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
+                    (SELECT AVG(CAST(ws2.BSW AS FLOAT))
+                     FROM dbo.DimWellStatus ws2
+                     WHERE ws2.DateKey = (
+                         SELECT MAX(f3.DateKey)
+                         FROM dbo.FactProduction f3
+                         JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
+                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.BSW > 0
+                     ))                                         AS avg_bsw,
+                    (SELECT AVG(CAST(ws2.GOR AS FLOAT))
+                     FROM dbo.DimWellStatus ws2
+                     WHERE ws2.GOR > 0
+                    )                                            AS avg_gor,
+                    CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
+                    SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
+                    SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
+                    MAX(d.FullDate)                              AS last_date,
+                    (SELECT AVG(CAST(ws2.ProdHours AS FLOAT))
+                     FROM dbo.DimWellStatus ws2
+                     WHERE ws2.DateKey = (
+                         SELECT MAX(f3.DateKey)
+                         FROM dbo.FactProduction f3
+                         JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
+                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.BSW > 0
+                     ))                                         AS avg_prodhours
+                FROM dbo.FactProduction f
+                JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+                LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+                WHERE f.DateKey = (
+                    SELECT MAX(DateKey) FROM dbo.FactProduction
+                    WHERE DailyOilPerWellSTBD > 0
+                )
+            """
         else:
-            result[key] = 0
+            if year:
+                where_clauses.append("d.[Year] = %s")
+                params.append(year)
+            if month:
+                where_clauses.append("d.[Month] = %s")
+                params.append(month)
 
-    return result
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+            sql = f"""
+                SELECT
+                    AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
+                    AVG(CAST(ws.BSW AS FLOAT))                 AS avg_bsw,
+                    AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))      AS avg_gor,
+                    CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT) AS total_oil,
+                    SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))  AS total_gas,
+                    SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))  AS total_water,
+                    MAX(d.FullDate)                             AS last_date,
+                    AVG(CAST(ws.ProdHours AS FLOAT))            AS avg_prodhours
+                FROM dbo.FactProduction f
+                JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+                LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+                WHERE {where_sql}
+            """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+
+        if not row or row[0] is None:
+            return {
+                'avg_bopd': 0, 'avg_bsw': 0, 'avg_gor': 0,
+                'total_oil_stbd': 0, 'total_gas_mscf': 0, 'total_water_bwpd': 0,
+                'last_date': None, 'avg_prodhours': 0,
+            }
+
+        return {
+            'avg_bopd':        _safe_float(row[0], 1),
+            'avg_bsw':         _safe_float(row[1], 2),
+            'avg_gor':         _safe_float(row[2], 0),
+            'total_oil_stbd':  _safe_int(row[3]),
+            'total_gas_mscf':  _safe_float(row[4], 0),
+            'total_water_bwpd': _safe_float(row[5], 0),
+            'last_date':       str(row[6]) if row[6] else None,
+            'avg_prodhours':   _safe_float(row[7], 1),
+        }
+
+    except Exception as e:
+        logger.error(f"get_field_production_summary error: {e}")
+        return {
+            'avg_bopd': 0, 'avg_bsw': 0, 'avg_gor': 0,
+            'total_oil_stbd': 0, 'total_gas_mscf': 0, 'total_water_bwpd': 0,
+            'last_date': None, 'avg_prodhours': 0,
+        }
 
 
+# ─── 2. WELL KPIs ────────────────────────────────────────────────
 def get_well_kpis(well_key=None, year=None, month=None):
     """
     KPIs par puits — production journalière, BSW, GOR.
     """
-    qs = FactDailyProduction.objects.select_related(
-        'wellkey', 'datekey'
-    )
+    try:
+        where_clauses = []
+        params = []
 
-    if well_key:
-        qs = qs.filter(wellkey=well_key)
-    if year:
-        qs = qs.filter(datekey__year=year)
-    if month:
-        qs = qs.filter(datekey__month=month)
+        if well_key:
+            where_clauses.append("f.WellKey = %s")
+            params.append(well_key)
+        if year:
+            where_clauses.append("d.[Year] = %s")
+            params.append(year)
+        if month:
+            where_clauses.append("d.[Month] = %s")
+            params.append(month)
 
-    result = qs.values(
-        well_code=F('wellkey__wellcode'),
-        well_name=F('wellkey__libelle'),
-    ).annotate(
-        avg_bopd      = Avg('dailyoilprodstbd'),
-        avg_bsw       = Avg('bsw'),
-        avg_gor       = Avg('gorscfstb'),
-        total_oil     = Sum('dailyoilprodstbd'),
-        total_water   = Sum('dailywaterprodblsd'),
-        total_gas     = Sum('dailygasprodmscf'),
-        avg_prodhours = Avg('prodhours'),
-        max_bopd      = Max('dailyoilprodstbd'),
-    ).order_by('-avg_bopd')
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
-    return list(result)
+        sql = f"""
+            SELECT
+                w.WellCode                                  AS well_code,
+                w.Libelle                                   AS well_name,
+                AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
+                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
+                AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor,
+                CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
+                SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
+                SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
+                AVG(CAST(ws.ProdHours AS FLOAT))             AS avg_prodhours,
+                MAX(f.DailyOilPerWellSTBD)                   AS max_bopd
+            FROM dbo.FactProduction f
+            JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+            JOIN dbo.DimWell w       ON f.WellKey = w.WellKey
+            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE {where_sql}
+            GROUP BY w.WellCode, w.Libelle
+            ORDER BY avg_bopd DESC
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        for row in rows:
+            for key in row:
+                if row[key] is None:
+                    row[key] = 0
+
+        return rows
+
+    except Exception as e:
+        logger.error(f"get_well_kpis error: {e}")
+        return []
 
 
-def get_monthly_trend(year=None, well_key=None):
+# ─── 3. MONTHLY TREND ────────────────────────────────────────────
+_MOIS_FR = {
+    1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+    5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+    9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre',
+}
+
+
+def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
+                      date_start=None, date_end=None):
     """
     Tendance mensuelle de production — pour graphiques.
+    Priorité : date_start/date_end > year_start/year_end > year.
     """
-    qs = FactDailyProduction.objects.select_related('datekey')
+    try:
+        where_clauses = []
+        params = []
 
-    if year:
-        qs = qs.filter(datekey__year=year)
-    if well_key:
-        qs = qs.filter(wellkey=well_key)
+        if date_start and date_end:
+            where_clauses.append("d.FullDate >= %s AND d.FullDate <= %s")
+            params.extend([str(date_start), str(date_end)])
+        elif year_start and year_end:
+            where_clauses.append("d.[Year] >= %s AND d.[Year] <= %s")
+            params.extend([year_start, year_end])
+        elif year:
+            where_clauses.append("d.[Year] = %s")
+            params.append(year)
 
-    result = qs.values(
-        month=F('datekey__month'),
-        year=F('datekey__year'),
-        month_name=F('datekey__monthname'),
-    ).annotate(
-        total_oil   = Sum('dailyoilprodstbd'),
-        total_water = Sum('dailywaterprodblsd'),
-        total_gas   = Sum('dailygasprodmscf'),
-        avg_bsw     = Avg('bsw'),
-        avg_gor     = Avg('gorscfstb'),
-    ).order_by('year', 'month')
+        if well_key:
+            where_clauses.append("f.WellKey = %s")
+            params.append(well_key)
 
-    return list(result)
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sql = f"""
+            SELECT
+                d.[Month]                                   AS [month],
+                d.[Year]                                    AS [year],
+                CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
+                SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
+                SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
+                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
+                AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor
+            FROM dbo.FactProduction f
+            JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE {where_sql}
+            GROUP BY d.[Month], d.[Year]
+            ORDER BY d.[Year], d.[Month]
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        for r in rows:
+            r['month_name'] = _MOIS_FR.get(r.get('month'), str(r.get('month', '')))
+
+        return rows
+
+    except Exception as e:
+        logger.error(f"get_monthly_trend error: {e}")
+        return []
 
 
-def get_well_test_kpis(well_key=None, year=None):
+# ─── 4. WELL STATUS KPIs ─────────────────────────────────────────
+def get_well_status_kpis(well_key=None, year=None, month=None):
     """
-    Résultats des tests de puits — BOPD, GOR, Water Cut.
+    Données opérationnelles journalières depuis DimWellStatus :
+    ProdHours, BSW, GOR, pressions, températures.
     """
-    qs = FactWellTest.objects.select_related('wellkey', 'datekey')
+    try:
+        where_clauses = []
+        params = []
 
-    if well_key:
-        qs = qs.filter(wellkey=well_key)
-    if year:
-        qs = qs.filter(datekey__year=year)
+        if well_key:
+            where_clauses.append("ws.WellKey = %s")
+            params.append(well_key)
+        if year:
+            where_clauses.append("d.[Year] = %s")
+            params.append(year)
+        if month:
+            where_clauses.append("d.[Month] = %s")
+            params.append(month)
 
-    result = qs.values(
-        well_code=F('wellkey__wellcode'),
-        well_name=F('wellkey__libelle'),
-        date=F('datekey__fulldate'),
-    ).annotate(
-        oil_bopd   = F('oilbopd'),
-        water_bwpd = F('waterbwpd'),
-        gas_mscfd  = F('gasmscfd'),
-        gor_value  = F('gor'),
-    ).order_by('-date')
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
-    return list(result)
+        sql = f"""
+            SELECT
+                w.WellCode          AS well_code,
+                w.Libelle           AS well_name,
+                d.FullDate          AS [date],
+                ws.ProdHours        AS prodhours_val,
+                ws.BSW              AS bsw_val,
+                ws.GOR              AS gor_val,
+                ws.FlowTempDegF     AS flowtemp_val,
+                ws.Choke16In        AS choke_val,
+                ws.TubingPsig       AS tubing_val,
+                ws.CasingPsig       AS casing_val,
+                ws.Remarque         AS remarque_val
+            FROM dbo.DimWellStatus ws
+            JOIN dbo.DimWell w ON ws.WellKey = w.WellKey
+            JOIN dbo.DimDate d ON ws.DateKey = d.DateKey
+            WHERE {where_sql}
+            ORDER BY d.FullDate DESC
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    except Exception as e:
+        logger.error(f"get_well_status_kpis error: {e}")
+        return []
 
 
-def get_top_producers(limit=5, year=None):
+# ─── 5. TOP PRODUCERS ────────────────────────────────────────────
+def get_top_producers(limit=5, year=None, month=None):
     """
-    Top N puits producteurs par huile.
+    Top N puits producteurs par huile (STB cumulé sur la période).
     """
-    qs = FactDailyProduction.objects.select_related('wellkey')
+    try:
+        where_clauses = []
+        params = []
 
-    if year:
-        qs = qs.filter(datekey__year=year)
+        if year:
+            where_clauses.append("d.[Year] = %s")
+            params.append(year)
+        if month:
+            where_clauses.append("d.[Month] = %s")
+            params.append(month)
 
-    return list(
-        qs.values(
-            well_code=F('wellkey__wellcode'),
-            well_name=F('wellkey__libelle'),
-        ).annotate(
-            total_oil = Sum('dailyoilprodstbd'),
-            avg_bopd  = Avg('dailyoilprodstbd'),
-            avg_bsw   = Avg('bsw'),
-        ).order_by('-total_oil')[:limit]
-    )
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sql = f"""
+            SELECT TOP(%s)
+                w.WellCode                                  AS well_code,
+                w.Libelle                                   AS well_name,
+                CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
+                AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
+                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw
+            FROM dbo.FactProduction f
+            JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+            JOIN dbo.DimWell w       ON f.WellKey = w.WellKey
+            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE {where_sql}
+            GROUP BY w.WellCode, w.Libelle
+            ORDER BY total_oil DESC
+        """
+        params_full = [limit] + params
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params_full)
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        for row in rows:
+            for key in row:
+                if row[key] is None:
+                    row[key] = 0
+
+        return rows
+
+    except Exception as e:
+        logger.error(f"get_top_producers error: {e}")
+        return []
 
 
-def get_cumulative_production(well_key=None):
+# ─── 6. TANK LEVELS ──────────────────────────────────────────────
+def get_tank_levels(tank_key=None, year=None, month=None,
+                    date_start=None, date_end=None):
     """
-    Production cumulée depuis le début.
+    Niveau des tanks par date (VolumeBBLS).
     """
-    qs = FactDailyProduction.objects.all()
-    if well_key:
-        qs = qs.filter(wellkey=well_key)
+    try:
+        where_clauses = []
+        params = []
 
-    return qs.aggregate(
-        cum_oil_stb   = Sum('cumoilstbcorrected'),
-        cum_water_bbl = Sum('cumwaterbbls'),
-        cum_gas_mscf  = Sum('cumgasmscf'),
-    )
+        if tank_key:
+            where_clauses.append("ft.TankKey = %s")
+            params.append(tank_key)
+        if date_start:
+            where_clauses.append("d.FullDate >= %s")
+            params.append(str(date_start))
+        if date_end:
+            where_clauses.append("d.FullDate <= %s")
+            params.append(str(date_end))
+        if year:
+            where_clauses.append("d.[Year] = %s")
+            params.append(year)
+        if month:
+            where_clauses.append("d.[Month] = %s")
+            params.append(month)
+
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sql = f"""
+            SELECT
+                t.TankCode          AS tank_code,
+                t.TankName          AS tank_name,
+                d.FullDate          AS [date],
+                ft.VolumeBBLS       AS volume
+            FROM dbo.FactTankLevel ft
+            JOIN dbo.DimTank t ON ft.TankKey = t.TankKey
+            JOIN dbo.DimDate d ON ft.DateKey = d.DateKey
+            WHERE {where_sql}
+            ORDER BY d.FullDate
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    except Exception as e:
+        logger.error(f"get_tank_levels error: {e}")
+        return []

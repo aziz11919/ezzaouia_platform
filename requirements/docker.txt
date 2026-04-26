@@ -1,0 +1,61 @@
+# ════════════════════════════════════════════════════════════
+# Requirements DOCKER — version optimisée sans PyTorch CUDA
+# EZZAOUIA Platform — MARETAP S.A.
+# ════════════════════════════════════════════════════════════
+
+# ─── Django core ─────────────────────────────────────────────
+Django==4.2.16
+mssql-django==1.4
+pyodbc==5.1.0
+
+# ─── API REST ────────────────────────────────────────────────
+djangorestframework==3.15.2
+
+# ─── Tâches asynchrones ──────────────────────────────────────
+celery==5.4.0
+redis==5.0.8
+django-celery-results==2.5.1
+django-celery-beat==2.6.0
+
+# ─── Extraction de fichiers ──────────────────────────────────
+PyPDF2==3.0.1
+python-docx==1.1.2
+pandas==2.2.3
+openpyxl==3.1.5
+
+# ─── PyTorch CPU uniquement (pas de CUDA dans Docker) ────────
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+
+# ─── Module IA / RAG ─────────────────────────────────────────
+langchain==0.3.7
+langchain-community==0.3.7
+langchain-ollama==0.2.1
+langchain-core==0.3.63
+langsmith==0.1.147
+chromadb==0.5.18
+sentence-transformers==3.2.1
+langchain-huggingface==0.1.2
+huggingface-hub>=0.23.0
+
+# ─── Sécurité & utilitaires ──────────────────────────────────
+python-decouple==3.8
+django-cors-headers==4.3.1
+django-guardian==2.4.0
+Pillow==11.0.0
+reportlab==4.4.10
+waitress==3.0.0
+whitenoise==6.8.2
+
+# ─── OCR ─────────────────────────────────────────────────────
+pytesseract==0.3.10
+pdf2image==1.17.0
+
+# Forecasting / Time Series
+prophet==1.1.5
+statsmodels==0.14.1
+pmdarima==2.0.4
+scipy==1.13.1
+scikit-learn==1.4.0
+numpy==1.26.0
+plotly==5.18.0

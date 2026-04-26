@@ -3,30 +3,30 @@ from apps.core.models import BaseModel
 
 
 class UploadedFile(BaseModel):
-    """Fichier uploadé par l'utilisateur — PDF, Word ou Excel."""
+    """User-uploaded file - PDF, Word, or Excel."""
 
     class FileType(models.TextChoices):
-        PDF   = 'pdf',  'PDF'
-        DOCX  = 'docx', 'Word'
-        XLSX  = 'xlsx', 'Excel'
+        PDF = 'pdf', 'PDF'
+        DOCX = 'docx', 'Word'
+        XLSX = 'xlsx', 'Excel'
 
     class Status(models.TextChoices):
-        PENDING    = 'pending',    'En attente'
-        PROCESSING = 'processing', 'En cours'
-        SUCCESS    = 'success',    'Terminé'
-        ERROR      = 'error',      'Erreur'
+        PENDING = 'pending', 'Pending'
+        PROCESSING = 'processing', 'Processing'
+        SUCCESS = 'success', 'Completed'
+        ERROR = 'error', 'Error'
 
-    file        = models.FileField(upload_to='uploads/%Y/%m/%d/')
+    file = models.FileField(upload_to='uploads/%Y/%m/%d/')
     original_name = models.CharField(max_length=255)
-    file_type   = models.CharField(max_length=10, choices=FileType.choices)
-    status      = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    file_type = models.CharField(max_length=10, choices=FileType.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     uploaded_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True)
-    error_msg   = models.TextField(blank=True)
+    error_msg = models.TextField(blank=True)
     rows_extracted = models.IntegerField(default=0)
 
     class Meta:
-        verbose_name        = 'Fichier uploadé'
-        verbose_name_plural = 'Fichiers uploadés'
+        verbose_name = 'Uploaded file'
+        verbose_name_plural = 'Uploaded files'
         ordering = ['-created_at']
 
     def __str__(self):

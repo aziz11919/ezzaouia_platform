@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+
+# Environnement virtuel
+venv/
+env/
+.env
+
+# Base de données et cache
+*.sqlite3
+chroma_db/
+django_cache/
+
+# Logs
+logs/
+*.log
+
+# Médias uploadés (persistés via volume)
+media/
+
+# Fichiers statiques buildés
+staticfiles/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Tests
+.pytest_cache/
+coverage/

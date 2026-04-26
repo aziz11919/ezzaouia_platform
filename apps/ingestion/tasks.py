@@ -2,6 +2,7 @@
 Tâches Celery asynchrones — traitement des fichiers uploadés.
 """
 import logging
+import os
 from celery import shared_task
 from .models import UploadedFile
 from .parsers import parse_excel, parse_pdf, parse_word
@@ -42,6 +43,21 @@ def process_uploaded_file(self, file_id):
                 raise Exception(error)
             uploaded.rows_extracted = len(text.split('\n'))
             logger.info(f"Word traité : {uploaded.rows_extracted} lignes")
+
+        # ── Petroleum document validation ────────────────────────
+        if file_type in ['pdf', 'docx'] and text:
+            from apps.chatbot.rag_pipeline import is_petroleum_document
+            if not is_petroleum_document(text):
+                uploaded.status = 'rejected'
+                uploaded.error_msg = 'Document not related to petroleum/MARETAP'
+                uploaded.save()
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except Exception as e:
+                    logger.warning(f"Impossible de supprimer {filepath} : {e}")
+                logger.info(f"Fichier {file_id} rejeté : non pétrolier")
+                return f"Fichier {file_id} rejeté : non pétrolier"
 
         # ── Indexation RAG pour PDF et Word ──────────────────────
         # Indexation RAG avec doc_id pour isolation

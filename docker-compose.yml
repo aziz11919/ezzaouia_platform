@@ -1,0 +1,123 @@
+services:
+
+  # ── Service Django (Waitress) ──────────────────────────────
+  web:
+    build: .
+    container_name: ezzaouia_web
+    restart: unless-stopped
+    command: waitress
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - MSSQL_ENCRYPT=no
+      - MSSQL_TRUST_SERVER_CERTIFICATE=yes
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./media:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./static:/app/static
+      - ./logs:/app/logs
+      - ./django_cache:/app/django_cache
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ezzaouia_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Service Celery Worker ──────────────────────────────────
+  celery:
+    build: .
+    container_name: ezzaouia_celery
+    restart: unless-stopped
+    command: celery
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - MSSQL_ENCRYPT=no
+      - MSSQL_TRUST_SERVER_CERTIFICATE=yes
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./media:/app/media
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ezzaouia_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Service Celery Beat (tâches planifiées) ────────────────
+  celery-beat:
+    build: .
+    container_name: ezzaouia_celery_beat
+    restart: unless-stopped
+    command: celery-beat
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ezzaouia_network
+
+  # ── Service Redis ──────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ezzaouia_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ezzaouia_network
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  ezzaouia_network:
+    driver: bridge

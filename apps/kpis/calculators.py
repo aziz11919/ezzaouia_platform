@@ -54,12 +54,8 @@ def get_field_production_summary(year=None, month=None):
                      ))                                         AS avg_bsw,
                     (SELECT AVG(CAST(ws2.GOR AS FLOAT))
                      FROM dbo.DimWellStatus ws2
-                     WHERE ws2.DateKey = (
-                         SELECT MAX(f3.DateKey)
-                         FROM dbo.FactProduction f3
-                         JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
-                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.BSW > 0
-                     ))                                         AS avg_gor,
+                     WHERE ws2.GOR > 0
+                    )                                            AS avg_gor,
                     CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                     SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
                     SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
@@ -94,7 +90,7 @@ def get_field_production_summary(year=None, month=None):
                 SELECT
                     AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
                     AVG(CAST(ws.BSW AS FLOAT))                 AS avg_bsw,
-                    AVG(CAST(ws.GOR AS FLOAT))                 AS avg_gor,
+                    AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))      AS avg_gor,
                     CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT) AS total_oil,
                     SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))  AS total_gas,
                     SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))  AS total_water,
@@ -164,7 +160,7 @@ def get_well_kpis(well_key=None, year=None, month=None):
                 w.Libelle                                   AS well_name,
                 AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
                 AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
-                AVG(CAST(ws.GOR AS FLOAT))                  AS avg_gor,
+                AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor,
                 CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                 SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
                 SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
@@ -238,7 +234,7 @@ def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
                 SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
                 SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
                 AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
-                AVG(CAST(ws.GOR AS FLOAT))                  AS avg_gor
+                AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
             LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey

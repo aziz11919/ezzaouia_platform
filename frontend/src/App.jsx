@@ -20,6 +20,7 @@ import EditUser from './pages/EditUser'
 import SharedSession from './pages/SharedSession'
 import PowerBI from './pages/PowerBI'
 import PowerBIReport from './components/PowerBIReport'
+import Forecasting from './pages/Forecasting'
 
 function LoadingGate() {
   return (
@@ -86,6 +87,7 @@ function AppRoutes() {
       <Route path="/powerbi/:id" element={<RequireAuth><PowerBIReport /></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><Stats /></RequireAuth>} />
+      <Route path="/forecasting" element={<RequireAuth><Forecasting /></RequireAuth>} />
       <Route path="/chatbot/stats" element={<RequireAuth><Stats /></RequireAuth>} />
       <Route path="/chatbot/shared/:token" element={<SharedSession />} />
 

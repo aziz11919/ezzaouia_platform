@@ -18,6 +18,7 @@ urlpatterns = [
     path('reports/', include('apps.reports.urls', namespace='reports')),
     path('chatbot/', include('apps.chatbot.urls')),
     path('audit/', include('apps.audit.urls', namespace='audit')),
+    path('api/forecasting/', include('apps.forecasting.urls', namespace='forecasting')),
     path('api/kpis/', include('apps.kpis.urls')),
     path('api/warehouse/', include('apps.warehouse.urls')),
     path('api/library/documents/', bibliotheque_views.api_documents, name='api_library_documents'),

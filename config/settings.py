@@ -40,6 +40,7 @@ LOCAL_APPS = [
     'apps.chatbot',
     'apps.dashboard',
     'apps.audit',
+    'apps.forecasting',
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -185,6 +186,9 @@ REST_FRAMEWORK = {
 # ── Configuration IA / RAG ────────────────────────────────────────
 OLLAMA_BASE_URL = config('OLLAMA_BASE_URL', default='http://127.0.0.1:11434')
 OLLAMA_MODEL    = config('OLLAMA_MODEL',    default='llama3.1:8b')
+OLLAMA_NUM_CTX = config('OLLAMA_NUM_CTX', default=4096, cast=int)
+OLLAMA_NUM_PREDICT = config('OLLAMA_NUM_PREDICT', default=900, cast=int)
+OLLAMA_TIMEOUT = config('OLLAMA_TIMEOUT', default=180, cast=int)
 CHROMA_PERSIST_DIR = config('CHROMA_PERSIST_DIR', default=str(BASE_DIR / 'chroma_db'))
 
 # ── Upload fichiers ───────────────────────────────────────────────

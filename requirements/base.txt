@@ -36,3 +36,12 @@ django-guardian==2.4.0     # RBAC niveau objet
 Pillow==11.0.0             # Traitement images (optionnel)
 reportlab==4.4.10          # Generation PDF
 whitenoise==6.8.2          # Serving fichiers statiques (DEBUG=False / Docker)
+
+# ─── Forecasting / Time Series ───────────────────────────────────
+prophet==1.1.5
+statsmodels==0.14.1
+pmdarima==2.0.4
+scipy==1.13.1
+scikit-learn==1.4.0
+numpy==1.26.0
+plotly==5.18.0

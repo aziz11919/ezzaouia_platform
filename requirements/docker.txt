@@ -50,3 +50,12 @@ whitenoise==6.8.2
 # ─── OCR ─────────────────────────────────────────────────────
 pytesseract==0.3.10
 pdf2image==1.17.0
+
+# Forecasting / Time Series
+prophet==1.1.5
+statsmodels==0.14.1
+pmdarima==2.0.4
+scipy==1.13.1
+scikit-learn==1.4.0
+numpy==1.26.0
+plotly==5.18.0

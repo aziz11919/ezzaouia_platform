@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart2, ExternalLink } from 'lucide-react'
 import Layout from '../components/Layout/Layout'
+import { powerbiAPI } from '../api/powerbi'
 
 export default function PowerBI() {
   const [reports,      setReports]      = useState([])
@@ -9,17 +10,31 @@ export default function PowerBI() {
   const [opened,       setOpened]       = useState(false)
 
   useEffect(() => {
-    fetch('/api/powerbi/reports/', { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => {
-        const list = data.reports || []
+    async function loadReports() {
+      try {
+        // Preferred source: DB-backed reports with role filtering.
+        const primary = await powerbiAPI.list()
+        let list = primary?.data?.reports || []
+
+        // Backward compatibility: fallback to legacy JSON endpoint.
+        if (!Array.isArray(list) || list.length === 0) {
+          const legacy = await powerbiAPI.reports()
+          list = legacy?.data?.reports || []
+        }
+
         setReports(list)
         const lastId = localStorage.getItem('powerbi-last-report')
-        const last   = list.find(r => r.id === lastId)
+        const last = list.find(r => String(r.id) === String(lastId))
         setActiveReport(last || list[0] || null)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      } catch (e) {
+        setReports([])
+        setActiveReport(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadReports()
   }, [])
 
   useEffect(() => {

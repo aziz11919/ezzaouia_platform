@@ -46,34 +46,39 @@ def get_field_production_summary(year=None, month=None):
                     AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
                     (SELECT AVG(CAST(ws2.BSW AS FLOAT))
                      FROM dbo.DimWellStatus ws2
-                     WHERE ws2.DateKey = (
+                     WHERE ws2.ProdHours > 0
+                       AND ws2.DateKey = (
                          SELECT MAX(f3.DateKey)
                          FROM dbo.FactProduction f3
                          JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
-                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.BSW > 0
+                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.ProdHours > 0
                      ))                                         AS avg_bsw,
-                    (SELECT AVG(CAST(ws2.GOR AS FLOAT))
-                     FROM dbo.DimWellStatus ws2
-                     WHERE ws2.GOR > 0
-                    )                                            AS avg_gor,
+                    CASE WHEN SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT)) > 0
+                         THEN SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT) * 1000.0)
+                              / SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT))
+                         ELSE 0
+                    END                                          AS avg_gor,
                     CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                     SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
                     SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
                     MAX(d.FullDate)                              AS last_date,
                     (SELECT AVG(CAST(ws2.ProdHours AS FLOAT))
                      FROM dbo.DimWellStatus ws2
-                     WHERE ws2.DateKey = (
+                     WHERE ws2.ProdHours > 0
+                       AND ws2.DateKey = (
                          SELECT MAX(f3.DateKey)
                          FROM dbo.FactProduction f3
                          JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
-                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.BSW > 0
+                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.ProdHours > 0
                      ))                                         AS avg_prodhours
                 FROM dbo.FactProduction f
                 JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
-                LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-                WHERE f.DateKey = (
-                    SELECT MAX(DateKey) FROM dbo.FactProduction
-                    WHERE DailyOilPerWellSTBD > 0
+                JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+                WHERE ws.ProdHours > 0
+                  AND f.DateKey = (
+                    SELECT MAX(fp2.DateKey) FROM dbo.FactProduction fp2
+                    JOIN dbo.DimWellStatus wsx ON fp2.WellStatusKey = wsx.WellStatusKey
+                    WHERE fp2.DailyOilPerWellSTBD > 0 AND wsx.ProdHours > 0
                 )
             """
         else:
@@ -90,7 +95,11 @@ def get_field_production_summary(year=None, month=None):
                 SELECT
                     AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
                     AVG(CAST(ws.BSW AS FLOAT))                 AS avg_bsw,
-                    AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))      AS avg_gor,
+                    CASE WHEN SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT)) > 0
+                         THEN SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT) * 1000.0)
+                              / SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT))
+                         ELSE 0
+                    END                                        AS avg_gor,
                     CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT) AS total_oil,
                     SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))  AS total_gas,
                     SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))  AS total_water,
@@ -98,8 +107,8 @@ def get_field_production_summary(year=None, month=None):
                     AVG(CAST(ws.ProdHours AS FLOAT))            AS avg_prodhours
                 FROM dbo.FactProduction f
                 JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
-                LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-                WHERE {where_sql}
+                JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+                WHERE ws.ProdHours > 0 AND {where_sql}
             """
 
         with connection.cursor() as cursor:
@@ -169,8 +178,8 @@ def get_well_kpis(well_key=None, year=None, month=None):
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
             JOIN dbo.DimWell w       ON f.WellKey = w.WellKey
-            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-            WHERE {where_sql}
+            JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE ws.ProdHours > 0 AND {where_sql}
             GROUP BY w.WellCode, w.Libelle
             ORDER BY avg_bopd DESC
         """
@@ -237,8 +246,8 @@ def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
                 AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
-            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-            WHERE {where_sql}
+            JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE ws.ProdHours > 0 AND {where_sql}
             GROUP BY d.[Month], d.[Year]
             ORDER BY d.[Year], d.[Month]
         """
@@ -338,8 +347,8 @@ def get_top_producers(limit=5, year=None, month=None):
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
             JOIN dbo.DimWell w       ON f.WellKey = w.WellKey
-            LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-            WHERE {where_sql}
+            JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE ws.ProdHours > 0 AND {where_sql}
             GROUP BY w.WellCode, w.Libelle
             ORDER BY total_oil DESC
         """

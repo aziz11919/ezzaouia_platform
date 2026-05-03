@@ -63,7 +63,7 @@ export default function Login() {
           </div>
           <div style={{ display: 'flex', gap: 40, marginTop: 56 }}>
             <div>
-              <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 28, fontWeight: 700, color: 'var(--gold)' }}>16</div>
+              <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 28, fontWeight: 700, color: 'var(--gold)' }}>3</div>
               <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>Active wells</div>
             </div>
             <div>

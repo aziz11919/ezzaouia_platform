@@ -5,6 +5,7 @@ from django.views.static import serve
 
 from apps.audit import views as audit_views
 from apps.bibliotheque import views as bibliotheque_views
+from apps.core import maintenance_views
 from apps.core.powerbi_views import powerbi_reports
 from apps.core.views import serve_react
 from apps.dashboard import powerbi_views
@@ -27,6 +28,8 @@ urlpatterns = [
     path('api/powerbi/reports/', powerbi_reports, name='api_powerbi_reports'),
     path('api/powerbi/', powerbi_views.api_powerbi_list, name='api_powerbi_list'),
     path('api/powerbi/<int:pk>/', powerbi_views.api_powerbi_detail, name='api_powerbi_detail'),
+    path('api/maintenance/status/', maintenance_views.maintenance_status, name='api_maintenance_status'),
+    path('api/maintenance/toggle/', maintenance_views.maintenance_toggle, name='api_maintenance_toggle'),
     re_path(r'^media/(?P<path>.+)$', serve, {'document_root': settings.MEDIA_ROOT}),
     path('', serve_react),
     re_path(r'^(?!admin/|api/|media/|static/).*$' , serve_react),

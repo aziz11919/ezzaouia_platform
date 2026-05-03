@@ -53,6 +53,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.maintenance_middleware.MaintenanceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'apps.accounts.middleware.SessionTimeoutMiddleware',
     'apps.accounts.middleware.ForcePasswordChangeMiddleware',

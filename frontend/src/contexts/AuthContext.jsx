@@ -22,6 +22,14 @@ export function AuthProvider({ children }) {
     refreshUser().finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (user?.role) {
+      window.sessionStorage.setItem('ezzaouia_role', user.role)
+    } else {
+      window.sessionStorage.removeItem('ezzaouia_role')
+    }
+  }, [user])
+
   const login = async (username, password) => {
     const res = await authAPI.login({ username, password })
     await refreshUser()

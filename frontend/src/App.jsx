@@ -21,6 +21,8 @@ import SharedSession from './pages/SharedSession'
 import PowerBI from './pages/PowerBI'
 import PowerBIReport from './components/PowerBIReport'
 import Forecasting from './pages/Forecasting'
+import MaintenancePage from './components/MaintenancePage'
+import AdminMaintenancePage from './pages/admin/MaintenancePage'
 
 function LoadingGate() {
   return (
@@ -83,11 +85,13 @@ function AppRoutes() {
       <Route path="/accounts/change-password" element={<RequireAuth><ChangePassword /></RequireAuth>} />
       <Route path="/accounts/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
       <Route path="/accounts/reset-password/:token" element={<PublicOnly><ResetPassword /></PublicOnly>} />
+      <Route path="/maintenance" element={<MaintenancePage />} />
       <Route path="/powerbi" element={<RequireAuth><PowerBI /></RequireAuth>} />
       <Route path="/powerbi/:id" element={<RequireAuth><PowerBIReport /></RequireAuth>} />
       <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
       <Route path="/stats" element={<RequireAuth><Stats /></RequireAuth>} />
       <Route path="/forecasting" element={<RequireAuth><Forecasting /></RequireAuth>} />
+      <Route path="/administration/maintenance" element={<RequireAuth><AdminMaintenancePage /></RequireAuth>} />
       <Route path="/chatbot/stats" element={<RequireAuth><Stats /></RequireAuth>} />
       <Route path="/chatbot/shared/:token" element={<SharedSession />} />
 

@@ -24,6 +24,18 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   response => response,
   error => {
+    if (error.response?.status === 503) {
+      const detail = error.response?.data?.detail
+      const role = window.sessionStorage.getItem('ezzaouia_role')
+      if (detail === 'maintenance') {
+        if (role === 'admin' && window.location.pathname !== '/administration/maintenance') {
+          window.location.href = '/administration/maintenance'
+        } else if (role !== 'admin' && window.location.pathname !== '/maintenance') {
+          window.location.href = '/maintenance'
+        }
+      }
+    }
+
     if (error.response?.status === 401) {
       const url = error.config?.url || ''
       if (!url.includes('/accounts/me/')) {

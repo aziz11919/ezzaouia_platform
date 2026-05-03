@@ -302,6 +302,25 @@ def normalize_well_code(text):
     return None
 
 
+def _get_date_comments(date_value):
+    """Fetch field operator comments from DimDate.comments for the given date."""
+    if not date_value or date_value == 'N/A':
+        return None
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT comments FROM dbo.DimDate WHERE FullDate = %s",
+                [date_value]
+            )
+            row = cursor.fetchone()
+            if row and row[0] and str(row[0]).strip():
+                return str(row[0]).strip()
+    except Exception as e:
+        logger.warning(f"DimDate comments fetch error: {e}")
+    return None
+
+
 def get_sql_context(question):
     from apps.kpis.calculators import (
         get_field_production_summary, get_top_producers,
@@ -338,6 +357,9 @@ Field average BSW    : {avg_bsw:.2f}%
 Field average GOR    : {avg_gor:,.0f} SCF/STB  {'[DATA UNAVAILABLE — measurement required]' if avg_gor == 0 else ''}
 Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at full capacity]' if avg_prodhours < 20 else ''}
 """
+        comments = _get_date_comments(last_date)
+        if comments:
+            context += f"\nRemarques du terrain ({last_date}): {comments}\n"
 
     # --- Well ranking ---
     if any(w in q for w in ['meilleur', 'top', 'performer', 'classement',

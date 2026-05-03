@@ -2,12 +2,35 @@ import { useState, useEffect } from 'react'
 import { BarChart2, ExternalLink } from 'lucide-react'
 import Layout from '../components/Layout/Layout'
 import { powerbiAPI } from '../api/powerbi'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function PowerBI() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [reports,      setReports]      = useState([])
   const [activeReport, setActiveReport] = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [opened,       setOpened]       = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [adminMessage, setAdminMessage] = useState('')
+  const [newReport,    setNewReport]    = useState({
+    title: '',
+    description: '',
+    embed_url: '',
+    icon: '📊',
+    role: 'all',
+    order: 0,
+  })
+  const [editUrl,      setEditUrl]      = useState('')
+
+  function hydrateActive(list) {
+    setReports(list)
+    const lastId = localStorage.getItem('powerbi-last-report')
+    const last = list.find(r => String(r.id) === String(lastId))
+    const selected = last || list[0] || null
+    setActiveReport(selected)
+    setEditUrl(selected?.embed_url || '')
+  }
 
   useEffect(() => {
     async function loadReports() {
@@ -22,13 +45,11 @@ export default function PowerBI() {
           list = legacy?.data?.reports || []
         }
 
-        setReports(list)
-        const lastId = localStorage.getItem('powerbi-last-report')
-        const last = list.find(r => String(r.id) === String(lastId))
-        setActiveReport(last || list[0] || null)
+        hydrateActive(list)
       } catch (e) {
         setReports([])
         setActiveReport(null)
+        setEditUrl('')
       } finally {
         setLoading(false)
       }
@@ -46,8 +67,75 @@ export default function PowerBI() {
 
   function openReport(report) {
     setActiveReport(report)
+    setEditUrl(report?.embed_url || '')
     localStorage.setItem('powerbi-last-report', report.id)
     window.open(report.embed_url, '_blank')
+  }
+
+  async function reloadReports() {
+    const primary = await powerbiAPI.list()
+    const list = primary?.data?.reports || []
+    hydrateActive(list)
+  }
+
+  async function handleAddReport(e) {
+    e.preventDefault()
+    setSaving(true)
+    setAdminMessage('')
+    try {
+      await powerbiAPI.create({
+        ...newReport,
+        order: Number(newReport.order || 0),
+      })
+      await reloadReports()
+      setNewReport({
+        title: '',
+        description: '',
+        embed_url: '',
+        icon: '📊',
+        role: 'all',
+        order: 0,
+      })
+      setAdminMessage('Report added successfully.')
+    } catch (err) {
+      setAdminMessage(err?.response?.data?.error || 'Failed to add report.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUpdateUrl(e) {
+    e.preventDefault()
+    if (!activeReport?.id) return
+    setSaving(true)
+    setAdminMessage('')
+    try {
+      await powerbiAPI.update(activeReport.id, { embed_url: editUrl })
+      await reloadReports()
+      setAdminMessage('Report URL updated successfully.')
+    } catch (err) {
+      setAdminMessage(err?.response?.data?.error || 'Failed to update URL.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteReport() {
+    if (!activeReport?.id) return
+    const ok = window.confirm(`Delete report "${activeReport.title}"?`)
+    if (!ok) return
+
+    setSaving(true)
+    setAdminMessage('')
+    try {
+      await powerbiAPI.remove(activeReport.id)
+      await reloadReports()
+      setAdminMessage('Report deleted successfully.')
+    } catch (err) {
+      setAdminMessage(err?.response?.data?.error || 'Failed to delete report.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -139,6 +227,59 @@ export default function PowerBI() {
                       {r.title}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {isAdmin && (
+              <div style={{ marginTop: '24px', width: '100%', maxWidth: 860, textAlign: 'left', border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--dark3, #1e2129)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Admin Only - Manage Reports
+                </div>
+                {adminMessage ? (
+                  <div style={{ fontSize: 12, marginBottom: 10, color: 'var(--text-muted)' }}>{adminMessage}</div>
+                ) : null}
+                <form onSubmit={handleAddReport} style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+                  <input value={newReport.title} onChange={(e) => setNewReport(prev => ({ ...prev, title: e.target.value }))} placeholder="Report title" required />
+                  <input value={newReport.embed_url} onChange={(e) => setNewReport(prev => ({ ...prev, embed_url: e.target.value }))} placeholder="Embed URL" required />
+                  <input value={newReport.description} onChange={(e) => setNewReport(prev => ({ ...prev, description: e.target.value }))} placeholder="Description (optional)" />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input value={newReport.icon} onChange={(e) => setNewReport(prev => ({ ...prev, icon: e.target.value }))} placeholder="Icon" />
+                    <select value={newReport.role} onChange={(e) => setNewReport(prev => ({ ...prev, role: e.target.value }))}>
+                      <option value="all">All</option>
+                      <option value="admin">Admin only</option>
+                      <option value="user">User</option>
+                    </select>
+                    <input type="number" value={newReport.order} onChange={(e) => setNewReport(prev => ({ ...prev, order: e.target.value }))} placeholder="Order" />
+                  </div>
+                  <button type="submit" disabled={saving}>Add Report</button>
+                </form>
+
+                <form onSubmit={handleUpdateUrl} style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Edit URL for: <strong>{activeReport?.title || 'No report selected'}</strong>
+                  </div>
+                  <input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="New embed URL" required disabled={!activeReport} />
+                  <button type="submit" disabled={saving || !activeReport}>Edit Report URL</button>
+                </form>
+
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={handleDeleteReport}
+                    disabled={saving || !activeReport}
+                    style={{
+                      background: '#7f1d1d',
+                      color: '#fff',
+                      border: '1px solid #b91c1c',
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      cursor: saving || !activeReport ? 'not-allowed' : 'pointer',
+                      opacity: saving || !activeReport ? 0.7 : 1,
+                    }}
+                  >
+                    Delete Report
+                  </button>
                 </div>
               </div>
             )}

@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash, HASH_SESSION_KEY
 import json
 import logging
 from django.contrib.auth.decorators import login_required
@@ -112,7 +112,7 @@ def login_view(request):
                 details={'path': request.path},
             )
             if _is_json_request(request):
-                redirect_path = '/profile' if user.must_change_password else '/dashboard'
+                redirect_path = '/accounts/change-password' if user.must_change_password else '/dashboard'
                 return JsonResponse({
                     'success': True,
                     'redirect': redirect_path,
@@ -673,7 +673,11 @@ def api_change_password(request):
     request.user.must_change_password = False
     request.user.last_password_change = timezone.now()
     request.user.save()
-    update_session_auth_hash(request, request.user)
+    # Avoid cycle_key() here (called by update_session_auth_hash), which can
+    # trigger session race conditions with concurrent requests in this SPA.
+    if hasattr(request.user, "get_session_auth_hash"):
+        request.session[HASH_SESSION_KEY] = request.user.get_session_auth_hash()
+        request.session.modified = True
     return JsonResponse({'success': True})
 
 

@@ -11,7 +11,31 @@ const YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR]
 
 function toMonthShort(label) {
   if (!label) return ''
-  return String(label).slice(0, 3)
+  const key = String(label).trim().toLowerCase()
+  if (key.startsWith('juin')) return 'Jun'
+  if (key.startsWith('juil')) return 'Jul'
+  const monthMap = {
+    jan: 'Jan',
+    fev: 'Feb',
+    fév: 'Feb',
+    feb: 'Feb',
+    mar: 'Mar',
+    avr: 'Apr',
+    apr: 'Apr',
+    mai: 'May',
+    may: 'May',
+    jun: 'Jun',
+    jul: 'Jul',
+    aou: 'Aug',
+    aoû: 'Aug',
+    aug: 'Aug',
+    sep: 'Sep',
+    oct: 'Oct',
+    nov: 'Nov',
+    dec: 'Dec',
+    déc: 'Dec',
+  }
+  return monthMap[key.slice(0, 3)] || monthMap[key] || key.slice(0, 3)
 }
 
 export default function Dashboard() {
@@ -23,18 +47,50 @@ export default function Dashboard() {
 
   useEffect(() => {
     let active = true
+    const hasData = (payload) =>
+      Boolean(
+        payload?.summary?.last_date ||
+        (Array.isArray(payload?.trend) && payload.trend.length) ||
+        (Array.isArray(payload?.topProducers) && payload.topProducers.length)
+      )
+
+    const loadYearData = async (targetYear) => {
+      const [summaryRes, trendRes, topRes] = await Promise.all([
+        kpisAPI.getSummary(targetYear),
+        kpisAPI.getTrend(targetYear),
+        kpisAPI.getTopProducers(targetYear),
+      ])
+      return {
+        summary: summaryRes.data || {},
+        trend: Array.isArray(trendRes.data) ? trendRes.data : [],
+        topProducers: Array.isArray(topRes.data) ? topRes.data : [],
+      }
+    }
+
     async function load() {
       setLoading(true)
       try {
-        const [summaryRes, trendRes, topRes] = await Promise.all([
-          kpisAPI.getSummary(year),
-          kpisAPI.getTrend(year),
-          kpisAPI.getTopProducers(year),
-        ])
+        const data = await loadYearData(year)
         if (!active) return
-        setSummary(summaryRes.data || {})
-        setTrend(Array.isArray(trendRes.data) ? trendRes.data : [])
-        setTopProducers(Array.isArray(topRes.data) ? topRes.data : [])
+        setSummary(data.summary)
+        setTrend(data.trend)
+        setTopProducers(data.topProducers)
+
+        if (!hasData(data) && year === CURRENT_YEAR) {
+          const fallbackYears = [...YEARS].sort((a, b) => b - a).filter((y) => y !== year)
+          for (const fallbackYear of fallbackYears) {
+            try {
+              const fallbackData = await loadYearData(fallbackYear)
+              if (!active) return
+              if (hasData(fallbackData)) {
+                setYear(fallbackYear)
+                return
+              }
+            } catch {
+              // Try the next fallback year.
+            }
+          }
+        }
       } catch (error) {
         if (!active) return
         setSummary(null)
@@ -125,12 +181,12 @@ export default function Dashboard() {
       <div className="section-label">Analytics - {year}</div>
       <div className="charts-grid">
         <div className="chart-card">
-          <div className="chart-title">Tendance Mensuelle</div>
+          <div className="chart-title">Monthly Trend</div>
           {trend.length ? <TrendChart labels={trendLabels} oilData={trendOil} bswData={trendBsw} /> : <div className="chart-empty">No data for {year}</div>}
         </div>
 
         <div className="chart-card">
-          <div className="chart-title" style={{ color: '#FFD700' }}>Top 5 Puits (BOPD)</div>
+          <div className="chart-title" style={{ color: '#FFD700' }}>Top 5 Wells (BOPD)</div>
           {topProducers.length ? <Top5Chart labels={topLabels} data={topBopd} /> : <div className="chart-empty">No data for {year}</div>}
         </div>
       </div>

@@ -165,6 +165,7 @@ def ask_view(request):
                 answer=answer,
                 duration=duration,
                 duration_seconds=duration,
+                chart_data=json.dumps(chart_data) if chart_data else None,
             )
         except (ProgrammingError, OperationalError):
             return JsonResponse(
@@ -623,6 +624,7 @@ def api_session_messages(request, session_id):
                 'answer':     m.answer,
                 'duration':   getattr(m, 'duration_seconds', None),
                 'created_at': m.created_at.strftime('%d/%m/%Y %H:%M'),
+                'chart_data': json.loads(m.chart_data) if m.chart_data else None,
             }
             for m in msgs
         ]

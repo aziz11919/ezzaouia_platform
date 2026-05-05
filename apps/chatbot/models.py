@@ -41,6 +41,7 @@ class ChatMessage(BaseModel):
     duration = models.FloatField(default=0)
     duration_seconds = models.FloatField(null=True, blank=True)
     is_satisfied = models.BooleanField(null=True, blank=True, default=None)
+    chart_data = models.TextField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Message'

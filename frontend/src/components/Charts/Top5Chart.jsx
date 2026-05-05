@@ -19,13 +19,15 @@ export default function Top5Chart({ labels = [], data = [] }) {
         chartRef.current = null
       }
 
+      const isDark = document.documentElement.getAttribute('data-theme') !== 'light'
+
       chartRef.current = new Chart(canvasRef.current, {
         type: 'bar',
         data: {
           labels,
           datasets: [
             {
-              label: 'BOPD moyen',
+              label: 'Average BOPD',
               data,
               backgroundColor: WELL_COLORS.slice(0, labels.length),
               borderRadius: 4,
@@ -56,7 +58,7 @@ export default function Top5Chart({ labels = [], data = [] }) {
             y: {
               grid: { display: false },
               ticks: {
-                color: '#FFF',
+                color: isDark ? '#FFD700' : '#0B1A2D',
                 font: { family: "'Rajdhani', sans-serif", size: 13, weight: 'bold' },
               },
             },

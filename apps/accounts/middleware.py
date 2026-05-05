@@ -9,6 +9,10 @@ EXEMPT_PATHS = {  #Liste des pages autorisées même si l'utilisateur doit chang
     '/accounts/change-password/',
     '/accounts/logout/',
     '/accounts/login/',
+    '/accounts/me/',
+    '/accounts/api-change-password/',
+    '/accounts/api-logout/',
+    '/accounts/ping/',
 }
 
 
@@ -31,6 +35,7 @@ class ForcePasswordChangeMiddleware:   #Middleware pour forcer changement mot de
 class SessionTimeoutMiddleware: #Middleware pour expirer session après 30 minutes d'inactivité
     timeout_seconds = 1800
     session_key = "last_activity" #clé session pour stocker dernière activité
+    write_throttle_seconds = 60
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -65,7 +70,17 @@ class SessionTimeoutMiddleware: #Middleware pour expirer session après 30 minut
                     login_url = reverse("accounts:login") #récupère URL login
                     return redirect(f"{login_url}?next={quote(request.path)}")
 
-            request.session[self.session_key] = now_ts #met à jour dernière activité     
+            last_saved_activity = request.session.get(self.session_key)
+            try:
+                last_saved_activity_int = int(last_saved_activity) if last_saved_activity is not None else None
+            except (TypeError, ValueError):
+                last_saved_activity_int = None
+            should_write = (
+                last_saved_activity_int is None
+                or (now_ts - last_saved_activity_int) >= self.write_throttle_seconds
+            )
+            if should_write:
+                request.session[self.session_key] = now_ts #met à jour dernière activité
 
         response = self.get_response(request)
         return response

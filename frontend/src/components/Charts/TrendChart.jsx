@@ -27,7 +27,7 @@ export default function TrendChart({ labels = [], oilData = [], bswData = [] }) 
           labels,
           datasets: [
             {
-              label: 'Huile (STB)',
+              label: 'Oil (STB)',
               data: oilData,
               borderColor: '#FF6B35',
               backgroundColor: 'rgba(255,107,53,0.1)',
@@ -85,7 +85,7 @@ export default function TrendChart({ labels = [], oilData = [], bswData = [] }) 
               position: 'left',
               grid: { color: 'rgba(255,255,255,0.05)' },
               ticks: { color: '#FF6B35' },
-              title: { display: true, text: 'Huile (STB)', color: '#FF6B35', font: { size: 10 } },
+              title: { display: true, text: 'Oil (STB)', color: '#FF6B35', font: { size: 10 } },
             },
             y1: {
               position: 'right',

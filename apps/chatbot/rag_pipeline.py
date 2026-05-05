@@ -2,6 +2,7 @@ import logging
 import re
 import hashlib
 import datetime
+import calendar
 from django.conf import settings
 from langchain_ollama import OllamaLLM
 from langchain_community.embeddings import SentenceTransformerEmbeddings
@@ -330,6 +331,7 @@ def get_sql_context(question):
 
     context = ""
     q = question.lower()
+    lang = detect_language(question)
 
     # --- Global field summary ---
     if any(w in q for w in ['production', 'total', 'champ', 'bopd', 'huile',
@@ -381,7 +383,7 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
     if years_found:
         if len(years_found) >= 2:
             y_start, y_end = int(min(years_found)), int(max(years_found))
-            trend = get_monthly_trend(year_start=y_start, year_end=y_end)
+            trend = get_monthly_trend(year_start=y_start, year_end=y_end, lang=lang)
             context += f"\n=== PRODUCTION {y_start}–{y_end} (MONTHLY) ===\n"
             if trend:
                 for t in trend:
@@ -395,7 +397,7 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
         else:
             year = int(years_found[0])
             summary = get_field_production_summary(year=year)
-            trend = get_monthly_trend(year=year)
+            trend = get_monthly_trend(year=year, lang=lang)
             if summary and summary.get('total_oil_stbd', 0) > 0:
                 context += f"\n=== PRODUCTION YEAR {year} ===\n"
                 context += f"  Average BOPD : {summary.get('avg_bopd', 0):,.1f} STB/j\n"
@@ -418,7 +420,7 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
     if well:
         year = int(years_found[0]) if years_found and len(years_found) == 1 else None
         kpis = get_well_kpis(well_key=well.well_key, year=year)
-        trend = get_monthly_trend(well_key=well.well_key, year=year)
+        trend = get_monthly_trend(well_key=well.well_key, year=year, lang=lang)
 
         context += f"\n=== WELL {well.well_code} — {well.libelle} ===\n"
         context += f"  Status       : {'SHUT-IN' if well.closed == 'Y' else 'ACTIVE'}\n"
@@ -535,8 +537,21 @@ _MONTHS_FR = {
 
 def parse_date_range(question):
     from datetime import date
+    from dateutil.relativedelta import relativedelta
     import calendar as _cal
     q = question.lower()
+
+    relative_pat = re.search(
+        r'les\s+(\d+)\s+derniers?\s+mois'
+        r'|(?:last|derniers?)\s+(\d+)\s+mois'
+        r'|last\s+(\d+)\s+months?',
+        q
+    )
+    if relative_pat:
+        n = int(next(g for g in relative_pat.groups() if g is not None))
+        today = date.today()
+        return today - relativedelta(months=n), today
+
     month_pat = '|'.join(_MONTHS_FR.keys())
     my_matches = re.findall(rf'({month_pat})\s+(20\d{{2}})', q)
     year_matches = re.findall(r'\b(20\d{2})\b', q)
@@ -578,11 +593,16 @@ def detect_chart_request(question):
 def build_chart_data(question):
     try:
         from apps.kpis.calculators import get_monthly_trend
+        from dateutil.relativedelta import relativedelta
         well = normalize_well_code(question)
         if not well:
             return None
         date_start, date_end = parse_date_range(question)
-        trend = get_monthly_trend(well_key=well.well_key, date_start=date_start, date_end=date_end)
+        if date_start is None or date_end is None:
+            date_end = datetime.date.today()
+            date_start = date_end - relativedelta(months=12)
+        lang = detect_language(question)
+        trend = get_monthly_trend(well_key=well.well_key, date_start=date_start, date_end=date_end, lang=lang)
         if not trend:
             return None
         labels = [f"{t['month_name']} {t['year']}" for t in trend]
@@ -621,20 +641,276 @@ def build_chart_data(question):
 
 
 def detect_language(text):
+    """Detect question language. Returns 'ar', 'en', or 'fr'."""
     if not text:
         return 'fr'
-    if re.search(r'[\u0600-\u06FF]', text):
+    arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+    if arabic_chars > 2:
         return 'ar'
     lowered = text.lower()
-    fr_words = ['analyse', 'puits', 'production', 'quel', 'quels', 'comment', 'donne', 'liste', 'montre']
-    en_words = ['analyze', 'well', 'production', 'what', 'how', 'show', 'give', 'list', 'top', 'which']
-    fr_score = sum(1 for w in fr_words if re.search(rf'\b{re.escape(w)}\b', lowered))
-    en_score = sum(1 for w in en_words if re.search(rf'\b{re.escape(w)}\b', lowered))
-    if en_score > fr_score and en_score > 0:
-        return 'en'
-    if fr_score > 0:
+    fr_keywords = [
+        'montre', 'montrer', 'affiche', 'afficher', 'donne', 'donner',
+        'analyse', 'analyser', 'quelle', 'quel', 'quels', 'quelles',
+        'tendance', 'puits', 'champ', 'mois', 'ann\u00E9e',
+        'pour', 'avec', 'dans', 'sur', 'les', 'des', 'du', 'la', 'le',
+        'janvier', 'f\u00E9vrier', 'mars', 'avril', 'juin',
+        'juillet', 'ao\u00FBt', 'septembre', 'octobre', 'novembre', 'd\u00E9cembre',
+    ]
+    en_keywords = [
+        'show', 'display', 'give', 'tell', 'analyze', 'analyse',
+        'what', 'which', 'how', 'trend', 'field', 'well', 'month',
+        'year', 'for', 'the', 'and', 'with', 'from', 'to', 'me',
+        'january', 'february', 'march', 'april', 'june',
+        'july', 'august', 'september', 'october', 'november', 'december',
+    ]
+    fr_score = sum(1 for kw in fr_keywords if kw in lowered)
+    en_score = sum(1 for kw in en_keywords if kw in lowered)
+    if fr_score > en_score:
         return 'fr'
+    elif en_score > fr_score:
+        return 'en'
+    elif en_score > 0:
+        return 'en'
     return 'fr'
+
+
+MONTH_NAMES = {
+    'fr': {
+        1: 'Janvier', 2: 'F\u00E9vrier', 3: 'Mars', 4: 'Avril',
+        5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Ao\u00FBt',
+        9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'D\u00E9cembre',
+    },
+    'en': {
+        1: 'January', 2: 'February', 3: 'March', 4: 'April',
+        5: 'May', 6: 'June', 7: 'July', 8: 'August',
+        9: 'September', 10: 'October', 11: 'November', 12: 'December',
+    },
+    'ar': {
+        1: '\u064A\u0646\u0627\u064A\u0631', 2: '\u0641\u0628\u0631\u0627\u064A\u0631', 3: '\u0645\u0627\u0631\u0633', 4: '\u0623\u0628\u0631\u064A\u0644',
+        5: '\u0645\u0627\u064A\u0648', 6: '\u064A\u0648\u0646\u064A\u0648', 7: '\u064A\u0648\u0644\u064A\u0648', 8: '\u0623\u063A\u0633\u0637\u0633',
+        9: '\u0633\u0628\u062A\u0645\u0628\u0631', 10: '\u0623\u0643\u062A\u0648\u0628\u0631', 11: '\u0646\u0648\u0641\u0645\u0628\u0631', 12: '\u062F\u064A\u0633\u0645\u0628\u0631',
+    },
+}
+
+
+def format_month(month_num, year, lang):
+    month_str = MONTH_NAMES.get(lang, MONTH_NAMES['fr']).get(month_num, str(month_num))
+    return f"{month_str} {year}"
+
+
+def _force_english_month_names(text):
+    """Normalize French month names to English in final English answers."""
+    if not text:
+        return text
+    replacements = {
+        r'\bjanvier\b': 'January',
+        r'\bfévrier\b': 'February',
+        r'\bfevrier\b': 'February',
+        r'\bmars\b': 'March',
+        r'\bavril\b': 'April',
+        r'\bmai\b': 'May',
+        r'\bjuin\b': 'June',
+        r'\bjuillet\b': 'July',
+        r'\baoût\b': 'August',
+        r'\baout\b': 'August',
+        r'\bseptembre\b': 'September',
+        r'\boctobre\b': 'October',
+        r'\bnovembre\b': 'November',
+        r'\bdécembre\b': 'December',
+        r'\bdecembre\b': 'December',
+    }
+    normalized = text
+    for pattern, target in replacements.items():
+        normalized = re.sub(pattern, target, normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def _extract_year(text):
+    match = re.search(r'\b(20\d{2})\b', text or "")
+    return int(match.group(1)) if match else None
+
+
+def _is_well_year_trend_request(question):
+    if not question:
+        return False
+    q = question.lower()
+    has_well = bool(normalize_well_code(question))
+    has_year = bool(_extract_year(question))
+    trend_words = [
+        'trend', 'monthly', 'history', 'evolution',
+        'tendance', 'historique', 'evolution',
+        '\u0627\u062a\u062c\u0627\u0647', '\u062a\u0637\u0648\u0631', '\u0634\u0647\u0631\u064a',
+    ]
+    metric_words = ['bopd', 'production', 'huile', 'oil', '\u0627\u0646\u062a\u0627\u062c']
+    has_trend_word = any(w in q for w in trend_words)
+    has_metric_word = any(w in q for w in metric_words)
+    return has_well and has_year and has_trend_word and has_metric_word
+
+
+def _localized_trend_word(direction, lang):
+    labels = {
+        'fr': {'up': 'En hausse', 'down': 'En baisse', 'flat': 'Stable'},
+        'en': {'up': 'Increasing', 'down': 'Decreasing', 'flat': 'Stable'},
+        'ar': {'up': '\u0645\u062a\u0632\u0627\u064a\u062f', 'down': '\u0645\u062a\u0631\u0627\u062c\u0639', 'flat': '\u0645\u0633\u062a\u0642\u0631'},
+    }
+    key = direction if direction in {'up', 'down'} else 'flat'
+    return labels.get(lang, labels['fr'])[key]
+
+
+def _trend_direction(previous_oil, current_oil):
+    prev = float(previous_oil or 0)
+    cur = float(current_oil or 0)
+    if prev <= 0:
+        return 'flat'
+    delta_pct = ((cur - prev) / prev) * 100.0
+    if delta_pct > 1.0:
+        return 'up'
+    if delta_pct < -1.0:
+        return 'down'
+    return 'flat'
+
+
+def _sanitize_answer_language(answer, lang):
+    if not answer:
+        return answer
+    # Normalize frequent mixed-language section titles.
+    replacements = {
+        'fr': {
+            r'\bExecutive Summary\b': 'Resume executif',
+            r'\bMonthly Production History\b': 'Historique mensuel de production',
+            r'\bTechnical Analysis\b': 'Analyse technique',
+            r'\bEngineering Recommendations\b': 'Recommandations',
+            r'\bIntervention Recommendations\b': 'Recommandations',
+            r'\bRecommendations\b': 'Recommandations',
+        },
+        'en': {
+            r'\bResume executif\b': 'Executive Summary',
+            r'\bR\u00e9sum\u00e9 ex\u00e9cutif\b': 'Executive Summary',
+            r'\bHistorique mensuel de production\b': 'Monthly Production History',
+            r'\bAnalyse technique\b': 'Technical Analysis',
+            r'\bRecommandations\b': 'Recommendations',
+        },
+        'ar': {
+            r'\bExecutive Summary\b': '\u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u062a\u0646\u0641\u064a\u0630\u064a',
+            r'\bResume executif\b': '\u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u062a\u0646\u0641\u064a\u0630\u064a',
+            r'\bR\u00e9sum\u00e9 ex\u00e9cutif\b': '\u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u062a\u0646\u0641\u064a\u0630\u064a',
+            r'\bMonthly Production History\b': '\u0627\u0644\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0634\u0647\u0631\u064a \u0644\u0644\u0625\u0646\u062a\u0627\u062c',
+            r'\bTechnical Analysis\b': '\u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u062a\u0642\u0646\u064a',
+            r'\bRecommendations\b': '\u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a',
+            r'\bEngineering Recommendations\b': '\u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a',
+            r'\bIntervention Recommendations\b': '\u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a',
+        },
+    }
+    normalized = answer
+    for pattern, target in replacements.get(lang, {}).items():
+        normalized = re.sub(pattern, target, normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def _build_structured_well_year_trend_answer(question, lang, today_str):
+    if not _is_well_year_trend_request(question):
+        return None
+    from apps.kpis.calculators import get_monthly_trend
+
+    well = normalize_well_code(question)
+    year = _extract_year(question)
+    if not well or not year:
+        return None
+
+    rows = get_monthly_trend(well_key=well.well_key, year=year, lang=lang)
+    if not rows:
+        return None
+
+    total_oil = sum(float(r.get('total_oil', 0) or 0) for r in rows)
+    total_days = sum(calendar.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
+    avg_bopd = (total_oil / total_days) if total_days > 0 else 0.0
+
+    # Annual trend direction from first to last available month.
+    first_oil = float(rows[0].get('total_oil', 0) or 0)
+    last_oil = float(rows[-1].get('total_oil', 0) or 0)
+    annual_direction = _localized_trend_word(_trend_direction(first_oil, last_oil), lang)
+
+    text = {
+        'fr': {
+            'title': f"## \U0001F6E2\uFE0F Champ EZZAOUIA - Tendance de production du puits {well.well_code}",
+            'summary': f"**Resume executif:** La tendance BOPD du puits {well.well_code} en {year} montre une production {annual_direction.lower()}, avec une moyenne de {avg_bopd:,.1f} STB/j.",
+            'monthly': "### Historique mensuel de production",
+            'month_col_1': "Mois",
+            'month_col_2': "Huile (STB)",
+            'month_col_3': "BSW%",
+            'month_col_4': "Tendance",
+            'analysis_title': "### Analyse technique",
+            'analysis_body': f"La tendance de production du puits {well.well_code} en {year} montre une moyenne BOPD stable de {avg_bopd:,.1f} STB/j, avec des fluctuations mensuelles.",
+            'reco_title': "### Recommandations",
+            'reco_1': "Suivi production: Continuer le suivi mensuel du debit et ajuster les conditions d'exploitation si necessaire.",
+            'reco_2': "Maintenance puits: Planifier la maintenance preventive pour maintenir la stabilite de production.",
+            'source': f"*Source: EZZAOUIA DWH - {today_str} - historical data 1994-2025*",
+        },
+        'en': {
+            'title': f"## \U0001F6E2\uFE0F EZZAOUIA Field - Well {well.well_code} Production Trend",
+            'summary': f"**Executive Summary:** The BOPD trend for well {well.well_code} in {year} shows {annual_direction.lower()} production, with an average of {avg_bopd:,.1f} STB/j.",
+            'monthly': "### Monthly Production History",
+            'month_col_1': "Month",
+            'month_col_2': "Oil (STB)",
+            'month_col_3': "BSW%",
+            'month_col_4': "Trend",
+            'analysis_title': "### Technical Analysis",
+            'analysis_body': f"The production trend for {well.well_code} in {year} shows an average BOPD of {avg_bopd:,.1f} STB/j, with monthly fluctuations.",
+            'reco_title': "### Recommendations",
+            'reco_1': "Monitor Production: Continue monthly rate surveillance and adjust operating conditions when needed.",
+            'reco_2': "Well Maintenance: Schedule preventive maintenance to sustain stable production.",
+            'source': f"*Source: EZZAOUIA DWH - {today_str} - historical data 1994-2025*",
+        },
+        'ar': {
+            'title': f"## \U0001F6E2\uFE0F \u062d\u0642\u0644 EZZAOUIA - \u0627\u062a\u062c\u0627\u0647 \u0625\u0646\u062a\u0627\u062c \u0627\u0644\u0628\u0626\u0631 {well.well_code}",
+            'summary': f"**\u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u062a\u0646\u0641\u064a\u0630\u064a:** \u064a\u064f\u0638\u0647\u0631 \u0627\u062a\u062c\u0627\u0647 BOPD \u0644\u0644\u0628\u0626\u0631 {well.well_code} \u0641\u064a {year} \u0625\u0646\u062a\u0627\u062c\u0627\u064b {annual_direction}\u060c \u0628\u0645\u062a\u0648\u0633\u0637 {avg_bopd:,.1f} STB/j.",
+            'monthly': "### \u0627\u0644\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0634\u0647\u0631\u064a \u0644\u0644\u0625\u0646\u062a\u0627\u062c",
+            'month_col_1': "\u0627\u0644\u0634\u0647\u0631",
+            'month_col_2': "\u0627\u0644\u0646\u0641\u0637 (STB)",
+            'month_col_3': "BSW%",
+            'month_col_4': "\u0627\u0644\u0627\u062a\u062c\u0627\u0647",
+            'analysis_title': "### \u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u062a\u0642\u0646\u064a",
+            'analysis_body': f"\u064a\u064f\u0638\u0647\u0631 \u0627\u062a\u062c\u0627\u0647 \u0625\u0646\u062a\u0627\u062c \u0627\u0644\u0628\u0626\u0631 {well.well_code} \u0641\u064a {year} \u0645\u062a\u0648\u0633\u0637 BOPD \u0628\u0642\u064a\u0645\u0629 {avg_bopd:,.1f} STB/j \u0645\u0639 \u062a\u0630\u0628\u0630\u0628\u0627\u062a \u0634\u0647\u0631\u064a\u0629.",
+            'reco_title': "### \u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a",
+            'reco_1': "\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0625\u0646\u062a\u0627\u062c: \u0627\u0644\u0627\u0633\u062a\u0645\u0631\u0627\u0631 \u0641\u064a \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0634\u0647\u0631\u064a\u0629 \u0648\u062a\u0639\u062f\u064a\u0644 \u0638\u0631\u0648\u0641 \u0627\u0644\u062a\u0634\u063a\u064a\u0644 \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629.",
+            'reco_2': "\u0635\u064a\u0627\u0646\u0629 \u0627\u0644\u0628\u0626\u0631: \u062c\u062f\u0648\u0644\u0629 \u0635\u064a\u0627\u0646\u0629 \u0648\u0642\u0627\u0626\u064a\u0629 \u0644\u0644\u062d\u0641\u0627\u0638 \u0639\u0644\u0649 \u0627\u0633\u062a\u0642\u0631\u0627\u0631 \u0627\u0644\u0625\u0646\u062a\u0627\u062c.",
+            'source': f"*\u0627\u0644\u0645\u0635\u062f\u0631: EZZAOUIA DWH - {today_str} - historical data 1994-2025*",
+        },
+    }.get(lang, None)
+
+    if text is None:
+        return None
+
+    lines = [
+        text['title'],
+        "",
+        text['summary'],
+        "",
+        text['monthly'],
+        f"| {text['month_col_1']} | {text['month_col_2']} | {text['month_col_3']} | {text['month_col_4']} |",
+        "|---|---:|---:|---|",
+    ]
+    prev_oil = None
+    for r in rows:
+        oil = float(r.get('total_oil', 0) or 0)
+        bsw = float(r.get('avg_bsw', 0) or 0)
+        trend_word = _localized_trend_word(_trend_direction(prev_oil, oil), lang) if prev_oil is not None else _localized_trend_word('flat', lang)
+        month_label = f"{r.get('month_name', '')} {r.get('year', year)}"
+        lines.append(f"| {month_label} | {oil:,.0f} | {bsw:.1f}% | {trend_word} |")
+        prev_oil = oil
+
+    lines.extend([
+        "",
+        text['analysis_title'],
+        text['analysis_body'],
+        "",
+        text['reco_title'],
+        f"1. {text['reco_1']}",
+        f"2. {text['reco_2']}",
+        "",
+        text['source'],
+    ])
+    return "\n".join(lines)
 
 
 def generate_suggestions(question, well=None, lang='fr'):
@@ -741,6 +1017,15 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             }.get(lang)
             return {'answer': greeting, 'chart_data': None, 'suggestions': generate_suggestions(question, lang=lang)}
 
+        structured_trend = _build_structured_well_year_trend_answer(question, lang, today_str)
+        if structured_trend:
+            well = normalize_well_code(question)
+            return {
+                'answer': structured_trend,
+                'chart_data': build_chart_data(question) if detect_chart_request(question) else None,
+                'suggestions': generate_suggestions(question, well=well, lang=lang),
+            }
+
         logger.info(f"Question: {question[:120]}")
 
         # Build enhanced search query
@@ -810,7 +1095,29 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         source_line = f"*Source: EZZAOUIA DWH — {today_str} — historical data 1994–2025*"
 
-        prompt = f"""{SYSTEM_PROMPT.replace('{TODAY}', today_str)}
+        if lang == 'ar':
+            lang_instruction = (
+                "CRITICAL: The user wrote in Arabic. "
+                "You MUST respond entirely in Arabic. "
+                "Use Arabic month names and Arabic numerals where appropriate. "
+                "Never switch to French or English."
+            )
+        elif lang == 'en':
+            lang_instruction = (
+                "CRITICAL: The user wrote in English. "
+                "You MUST respond entirely in English. "
+                "Never switch to French or Arabic."
+            )
+        else:
+            lang_instruction = (
+                "CRITICAL: L'utilisateur a écrit en français. "
+                "Vous DEVEZ répondre entièrement en français. "
+                "Ne jamais basculer vers l'anglais ou l'arabe."
+            )
+
+        prompt = f"""{lang_instruction}
+
+{SYSTEM_PROMPT.replace('{TODAY}', today_str)}
 
 ════════════════════════════════════════════════════
 CONTEXT FOR THIS RESPONSE
@@ -833,12 +1140,16 @@ SOURCE LINE (use verbatim): {source_line}
 === END DOCUMENTS LIST ===
 
 {history_text}{memory_context}
+
 ════════════════════════════════════════════════════
 QUESTION: {question}
 ════════════════════════════════════════════════════"""
 
         response = get_llm().invoke(prompt)
         answer = response.strip()
+        if lang == 'en':
+            answer = _force_english_month_names(answer)
+        answer = _sanitize_answer_language(answer, lang)
         logger.info(f"Response generated: {len(answer)} chars")
 
         well = normalize_well_code(question)

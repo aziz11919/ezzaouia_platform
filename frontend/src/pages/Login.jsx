@@ -16,7 +16,8 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard', { replace: true })
+      const target = user.must_change_password ? '/accounts/change-password' : '/dashboard'
+      navigate(target, { replace: true })
     }
   }, [user, navigate])
 

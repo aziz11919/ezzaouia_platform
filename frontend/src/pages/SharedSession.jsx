@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useTheme } from '../contexts/ThemeContext'
 import api from '../api/axios'
 
@@ -103,8 +104,47 @@ export default function SharedSession() {
                   IA
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ padding: '14px 18px', borderRadius: '2px 10px 10px 10px', fontSize: 13, lineHeight: 1.8, background: 'var(--dark2)', border: '1px solid var(--border-soft)', color: 'var(--text)' }} className="shared-md">
-                    <ReactMarkdown>{msg.answer}</ReactMarkdown>
+                  <div style={{ padding: '14px 18px', borderRadius: '2px 10px 10px 10px', fontSize: 13, lineHeight: 1.8, background: 'var(--dark2)', border: '1px solid var(--border-soft)', color: 'var(--text)' }}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({node, ...props}) => (
+                          <table style={{ borderCollapse: 'collapse', width: '100%', margin: '12px 0', fontSize: '13px' }} {...props} />
+                        ),
+                        th: ({node, ...props}) => (
+                          <th style={{ padding: '8px 12px', borderBottom: '2px solid var(--gold)', textAlign: 'left', color: 'var(--gold)', fontWeight: '600' }} {...props} />
+                        ),
+                        td: ({node, ...props}) => (
+                          <td style={{ padding: '7px 12px', borderBottom: '1px solid var(--border-soft)' }} {...props} />
+                        ),
+                        strong: ({node, ...props}) => (
+                          <strong style={{ color: 'var(--gold-light)' }} {...props} />
+                        ),
+                        h2: ({node, ...props}) => (
+                          <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--gold)', margin: '16px 0 8px', fontFamily: 'Rajdhani, sans-serif' }} {...props} />
+                        ),
+                        h3: ({node, ...props}) => (
+                          <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)', margin: '12px 0 6px' }} {...props} />
+                        ),
+                        blockquote: ({node, ...props}) => (
+                          <blockquote style={{ borderLeft: '3px solid var(--gold)', paddingLeft: '12px', margin: '8px 0', color: 'var(--text-muted)', fontStyle: 'italic' }} {...props} />
+                        ),
+                        ul: ({node, ...props}) => (
+                          <ul style={{ paddingLeft: '20px', margin: '6px 0' }} {...props} />
+                        ),
+                        li: ({node, ...props}) => (
+                          <li style={{ margin: '3px 0', lineHeight: '1.6' }} {...props} />
+                        ),
+                        hr: ({node, ...props}) => (
+                          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0' }} {...props} />
+                        ),
+                        em: ({node, ...props}) => (
+                          <em style={{ color: 'var(--text-dim)', fontSize: '12px' }} {...props} />
+                        ),
+                      }}
+                    >
+                      {msg.answer || ''}
+                    </ReactMarkdown>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">

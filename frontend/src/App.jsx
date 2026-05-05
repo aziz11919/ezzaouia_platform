@@ -40,13 +40,28 @@ function RequireAuth({ children }) {
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
+  if (
+    user.must_change_password === true &&
+    location.pathname !== '/accounts/change-password'
+  ) {
+    return <Navigate to="/accounts/change-password" replace />
+  }
+  if (
+    user.must_change_password !== true &&
+    location.pathname === '/accounts/change-password'
+  ) {
+    return <Navigate to="/dashboard" replace />
+  }
   return children
 }
 
 function PublicOnly({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <LoadingGate />
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user) {
+    const target = user.must_change_password ? '/accounts/change-password' : '/dashboard'
+    return <Navigate to={target} replace />
+  }
   return children
 }
 

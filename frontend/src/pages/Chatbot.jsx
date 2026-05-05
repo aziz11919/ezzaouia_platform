@@ -43,9 +43,10 @@ function BotChart({ chartData }) {
       data: { labels: chartData.labels, datasets: chartData.datasets || [] },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { labels: { color: txtClr, font: { family: 'Inter', size: 11 }, boxWidth: 12 } },
+          legend: { position: 'top', labels: { color: txtClr, font: { family: 'Inter', size: 11 }, boxWidth: 12 } },
         },
         scales: {
           x:  { ticks: { color: txtClr, font: { size: 10 }, maxRotation: 45 }, grid: { color: gridClr } },
@@ -67,7 +68,9 @@ function BotChart({ chartData }) {
           📊 Trend · {chartData.well_code}{chartData.well_name ? ` — ${chartData.well_name}` : ''}
         </div>
       </div>
-      <canvas ref={canvasRef} height={200} />
+      <div style={{ width: '100%', height: '300px', maxHeight: '320px', marginTop: '8px' }}>
+        <canvas ref={canvasRef} />
+      </div>
     </div>
   )
 }
@@ -526,7 +529,8 @@ export default function Chatbot() {
         const msgs = (r.data?.messages || []).flatMap(m => [
           { id: `u-${m.id}`, type: 'user', question: m.question },
           { id: `b-${m.id}`, type: 'bot', answer: m.answer, duration: m.duration,
-            createdAt: m.created_at, messageId: m.id, is_satisfied: m.is_satisfied ?? null },
+            createdAt: m.created_at, messageId: m.id, is_satisfied: m.is_satisfied ?? null,
+            chartData: m.chart_data || null },
         ])
         setMessages(msgs)
         setActiveSession({ id: effectiveSessionId, title: r.data?.title })

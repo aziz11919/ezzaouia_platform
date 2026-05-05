@@ -207,10 +207,20 @@ _MOIS_FR = {
     5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
     9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre',
 }
+_MOIS_EN = {
+    1: 'January', 2: 'February', 3: 'March', 4: 'April',
+    5: 'May', 6: 'June', 7: 'July', 8: 'August',
+    9: 'September', 10: 'October', 11: 'November', 12: 'December',
+}
+_MOIS_AR = {
+    1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'أبريل',
+    5: 'مايو', 6: 'يونيو', 7: 'يوليو', 8: 'أغسطس',
+    9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر',
+}
 
 
 def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
-                      date_start=None, date_end=None):
+                      date_start=None, date_end=None, lang='fr'):
     """
     Tendance mensuelle de production — pour graphiques.
     Priorité : date_start/date_end > year_start/year_end > year.
@@ -257,8 +267,9 @@ def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
             columns = [col[0] for col in cursor.description]
             rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+        _month_map = {'en': _MOIS_EN, 'ar': _MOIS_AR}.get(lang, _MOIS_FR)
         for r in rows:
-            r['month_name'] = _MOIS_FR.get(r.get('month'), str(r.get('month', '')))
+            r['month_name'] = _month_map.get(r.get('month'), str(r.get('month', '')))
 
         return rows
 

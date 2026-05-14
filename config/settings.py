@@ -184,7 +184,7 @@ REST_FRAMEWORK = {
 }
 
 # ── Configuration IA / RAG ────────────────────────────────────────
-OLLAMA_BASE_URL = config('OLLAMA_BASE_URL', default='http://127.0.0.1:11434')
+OLLAMA_BASE_URL = config('OLLAMA_BASE_URL', default='http://ollama:11434')
 OLLAMA_MODEL    = config('OLLAMA_MODEL',    default='llama3.1:8b')
 OLLAMA_NUM_CTX = config('OLLAMA_NUM_CTX', default=4096, cast=int)
 OLLAMA_NUM_PREDICT = config('OLLAMA_NUM_PREDICT', default=900, cast=int)

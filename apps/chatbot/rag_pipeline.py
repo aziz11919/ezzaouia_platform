@@ -154,14 +154,23 @@ ABSOLUTE RULES — NEVER VIOLATE
 13. For field analysis → always compare to field average as benchmark
 14. Production trends → quantify: "declined by 23% over Q3 2025" not "production declined"
 15. Replace {TODAY} in source line with actual date from DATE variable
-16. If the answer to a question is not found in the SQL context, document
-    context, or operator comments — respond exactly:
-    "No information found in the indexed documents for this query."
-    NEVER invent, guess, or approximate an answer.
+16. ⚠️ ANTI-HALLUCINATION RULE:
+    Answer from the DOCUMENT CONTEXT above.
+    Extract facts directly — dates, causes, decisions, numbers.
+    Write 3-5 plain sentences maximum.
+    Only say "The indexed documents do not contain specific information
+    about this query." if the DOCUMENT CONTEXT section shows
+    "No documents attached" or contains zero relevant information.
+    NEVER say this if the context has chunks from DGH or other documents.
 17. For questions about periods, dates, or durations of field activities
     (monitoring, workover, shut-in, consulting...) — use ONLY the operator
     comments from DimDate. If no comments are found, say:
     "No operator log entries found for this activity in the database."
+18. ⚠️ WELL CODE PRECISION:
+    EZZ1 and EZZ11 are DIFFERENT wells. Never confuse them.
+    If asked about EZZ1, answer ONLY about EZZ1.
+    If asked about EZZ11, answer ONLY about EZZ11.
+    Always verify the exact well number before answering.
 """
 
 KEYWORDS = [
@@ -195,8 +204,11 @@ def get_llm():
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
-            num_ctx=4096,
-            num_predict=1000,
+            # ✅ FIX 1: Increased from 3000 to 8192.
+            # With 3000 the prompt was silently truncated — Ollama never
+            # saw the retrieved document chunks, causing hallucinations.
+            num_ctx=8192,
+            num_predict=1200,
             top_p=0.85,
             repeat_penalty=1.15,
             timeout=180,
@@ -246,6 +258,9 @@ def index_document(text, metadata=None, doc_id=None):
     metadata = metadata or {}
     if doc_id:
         metadata['doc_id'] = str(doc_id)
+
+    import re as _re
+
     try:
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=800,
@@ -253,10 +268,24 @@ def index_document(text, metadata=None, doc_id=None):
             separators=["\n\n", "\n", ".", " "],
         )
         chunks = splitter.split_text(text)
-        docs = [
-            Document(page_content=chunk, metadata={**metadata, 'chunk_index': i, 'chunk_total': len(chunks)})
-            for i, chunk in enumerate(chunks)
-        ]
+        docs = []
+        for i, chunk in enumerate(chunks):
+            chunk_meta = {
+                **metadata,
+                'chunk_index': i,
+                'chunk_total': len(chunks)
+            }
+            well_match = _re.search(
+                r'(?:EZZ|EZZAOUIA)\s*#?\s*(\d{1,2})\b(?!\d)', chunk, _re.IGNORECASE)
+            if not well_match:
+                well_match = _re.search(
+                    r'(?:EZZ|EZZAOUIA)\s*[-#]?\s*0*(\d{1,2})\b', chunk, _re.IGNORECASE)
+            if well_match:
+                chunk_meta['well_num'] = well_match.group(1)
+            docs.append(Document(
+                page_content=chunk,
+                metadata=chunk_meta
+            ))
         if doc_id:
             get_vectorstore_for_doc(doc_id).add_documents(docs)
         get_global_vectorstore().add_documents(docs)
@@ -267,19 +296,140 @@ def index_document(text, metadata=None, doc_id=None):
         return 0
 
 
-def retrieve_smart(query, doc_id=None, filename=None, k=6):
+def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
     try:
+        results = []
+
         if doc_id:
             vs = get_vectorstore_for_doc(doc_id)
-            results = vs.max_marginal_relevance_search(query, k=k, fetch_k=k * 3, lambda_mult=0.6)
+            results = vs.max_marginal_relevance_search(
+                query, k=k, fetch_k=k*3, lambda_mult=0.6)
             if results:
                 return results
+
         vs = get_global_vectorstore()
+
         if filename:
-            results = vs.similarity_search(query, k=k, filter={"filename": {"$eq": filename}})
+            results = vs.similarity_search(
+                query, k=k, filter={"filename": {"$eq": filename}})
             if results:
                 return results
-        return vs.max_marginal_relevance_search(query, k=k, fetch_k=k * 4, lambda_mult=0.5)
+
+        main_results = vs.max_marginal_relevance_search(
+            query, k=k, fetch_k=k*4, lambda_mult=0.5)
+
+        # Boost well-specific chunks to the top when a well number is specified
+        if well_num:
+            well_results = []
+            dgh_results = []
+            other_results = []
+            # Try to find the specific DGH split file for this well
+            if well_num:
+                DGH_FILENAME = f"DGH_EZZ{well_num}.pdf"
+            else:
+                DGH_FILENAME = "DGH_INTRO.pdf"
+            for r in main_results:
+                chunk_well = r.metadata.get('well_num', '')
+                chunk_file = r.metadata.get('filename', '')
+                if chunk_well == well_num:
+                    well_results.append(r)
+                elif chunk_file == DGH_FILENAME:
+                    dgh_results.append(r)
+                else:
+                    other_results.append(r)
+
+            try:
+                col = vs._collection
+                all_dgh = col.get(
+                    where={"filename": DGH_FILENAME},
+                    include=['documents', 'metadatas']
+                )
+                existing_keys = {r.page_content[:80] for r in dgh_results}
+                from langchain.schema import Document as LCDoc
+                import re as _re
+                well_pattern = _re.compile(
+                    rf'(?:EZZAOUIA|EZZ)\s*#?\s*0*{well_num}\b', _re.IGNORECASE)
+                for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas']):
+                    if doc[:80] in existing_keys:
+                        continue
+                    if well_pattern.search(doc):
+                        dgh_results.append(LCDoc(page_content=doc, metadata=meta))
+                        existing_keys.add(doc[:80])
+                dgh_extra = None  # skip the old query block
+                logger.info(f"DGH keyword fetch: {len(dgh_results)} total DGH chunks")
+            except Exception as e:
+                logger.warning(f"DGH extra fetch error: {e}")
+
+            # For small single-page files, include ALL chunks (not just top matches)
+            if len(dgh_results) < 4:
+                try:
+                    all_dgh = col.get(
+                        where={"filename": DGH_FILENAME},
+                        include=['documents', 'metadatas']
+                    )
+                    existing_keys = {r.page_content[:80] for r in dgh_results}
+                    for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas']):
+                        if doc[:80] not in existing_keys:
+                            dgh_results.append(LCDoc(page_content=doc, metadata=meta))
+                            existing_keys.add(doc[:80])
+                    logger.info(f"Small file — all {len(dgh_results)} DGH chunks included")
+                except Exception as e:
+                    logger.warning(f"Small file fetch error: {e}")
+
+            main_results = well_results + dgh_results + other_results
+            logger.info(
+                f"Well {well_num} filtering: {len(well_results)} tagged, "
+                f"{len(dgh_results)} DGH, {len(other_results)} others"
+            )
+
+        # Try to find the specific DGH split file for this well
+        if well_num:
+            DGH_FILENAME = f"DGH_EZZ{well_num}.pdf"
+        else:
+            DGH_FILENAME = "DGH_INTRO.pdf"
+        dgh_present = any(
+            r.metadata.get('filename') == DGH_FILENAME
+            for r in main_results
+        )
+
+        if not dgh_present:
+            try:
+                embeddings = get_embeddings()
+                query_embedding = embeddings.embed_query(query)
+                col = vs._collection
+                dgh_raw = col.query(
+                    query_embeddings=[query_embedding],
+                    n_results=4,
+                    where={"filename": DGH_FILENAME}
+                )
+                dgh_docs = []
+                if dgh_raw and dgh_raw.get('documents'):
+                    for doc, meta in zip(
+                        dgh_raw['documents'][0],
+                        dgh_raw['metadatas'][0]
+                    ):
+                        from langchain.schema import Document as LCDoc
+                        dgh_docs.append(LCDoc(
+                            page_content=doc,
+                            metadata=meta
+                        ))
+
+                if dgh_docs:
+                    combined = main_results + dgh_docs
+                    seen = set()
+                    deduped = []
+                    for r in combined:
+                        key = r.page_content[:100]
+                        if key not in seen:
+                            seen.add(key)
+                            deduped.append(r)
+                    logger.info(f"DGH report forced: {len(dgh_docs)} chunks added")
+                    return deduped[:k + 4]
+            except Exception as e:
+                logger.warning(f"DGH forced retrieval error: {e}")
+
+        return main_results
+
     except Exception as e:
         logger.error(f"Retrieval error: {e}")
         return []
@@ -314,7 +464,6 @@ def normalize_well_code(text):
 
 
 def _get_date_comments(date_value):
-    """Fetch field operator comments from DimDate.comments for the given date."""
     if not date_value or date_value == 'N/A':
         return None
     try:
@@ -334,10 +483,6 @@ def _get_date_comments(date_value):
 
 def search_date_comments(keyword: str = None, well_code: str = None,
                          limit: int = 200) -> list:
-    """
-    Search DimDate.comments for entries matching a keyword and/or well code.
-    Returns list of {date, comments} dicts ordered by date ASC.
-    """
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -350,9 +495,6 @@ def search_date_comments(keyword: str = None, well_code: str = None,
                 num = re.search(r'\d+', well_code)
                 if num:
                     n = num.group()
-                    # Match EZZ#1 or EZZ# 1 but NOT EZZ#10, EZZ#11 etc.
-                    # Use word boundary approach: number must not be followed
-                    # by another digit
                     conditions.append(
                         "(comments LIKE %s OR comments LIKE %s OR comments LIKE %s)"
                     )
@@ -380,10 +522,6 @@ def search_date_comments(keyword: str = None, well_code: str = None,
 
 def search_date_comments_multi(keywords: list, well_code: str = None,
                                 limit: int = 50) -> list:
-    """
-    Search DimDate.comments for entries matching ALL keywords (AND logic).
-    Much more precise than OR-based search.
-    """
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -396,9 +534,6 @@ def search_date_comments_multi(keywords: list, well_code: str = None,
                 num = re.search(r'\d+', well_code)
                 if num:
                     n = num.group()
-                    # Match EZZ#1 or EZZ# 1 but NOT EZZ#10, EZZ#11 etc.
-                    # Use word boundary approach: number must not be followed
-                    # by another digit
                     conditions.append(
                         "(comments LIKE %s OR comments LIKE %s OR comments LIKE %s)"
                     )
@@ -435,7 +570,6 @@ def get_sql_context(question):
     q = question.lower()
     lang = detect_language(question)
 
-    # --- Global field summary ---
     if any(w in q for w in ['production', 'total', 'champ', 'bopd', 'huile',
                              'résumé', 'resume', 'situation', 'global',
                              'bilan', 'analyse', 'performance', 'kpi',
@@ -465,7 +599,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
         if comments:
             context += f"\nRemarques du terrain ({last_date}): {comments}\n"
 
-    # --- Well ranking ---
     if any(w in q for w in ['meilleur', 'top', 'performer', 'classement',
                              'faible', 'low', 'analyse', 'performance',
                              'best', 'worst', 'ranking', 'producers']):
@@ -480,7 +613,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
                 f"BSW: {float(w.get('avg_bsw', 0) or 0):>5.1f}%{bsw_flag}\n"
             )
 
-    # --- Year/period trend ---
     years_found = re.findall(r'\b(20\d{2})\b', q)
     if years_found:
         if len(years_found) >= 2:
@@ -517,7 +649,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
             else:
                 context += f"\n  No production data found for year {year}.\n"
 
-    # --- Single well deep dive ---
     well = normalize_well_code(question)
     if well:
         year = int(years_found[0]) if years_found and len(years_found) == 1 else None
@@ -553,15 +684,14 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
             context += f"  Prod hours   : {avg_prodhours_w:.1f} h/j\n"
 
         if trend:
-            context += "\n  Monthly production history:\n"
-            for t in trend:
+            context += "\n  Monthly production history (last 12 months):\n"
+            for t in trend[-12:]:
                 context += (
                     f"    {str(t['month_name']):12} {t['year']} : "
                     f"{float(t.get('total_oil', 0) or 0):>10,.0f} STB | "
                     f"BSW {float(t.get('avg_bsw', 0) or 0):.1f}%\n"
                 )
 
-    # --- Reservoir / WCT / GOR analysis ---
     if any(w in q for w in ['wct', 'water cut', 'bsw', 'gor', 'réservoir',
                              'reservoir', 'forecast', 'pression', 'pressure']):
         s = get_field_production_summary()
@@ -579,7 +709,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
             flag = " 🔴 CRITICAL" if bsw_w > 80 else " ⚠️ HIGH" if bsw_w > 50 else ""
             context += f"    {w['well_code']:8} | BSW: {bsw_w:>5.1f}% | BOPD: {float(w.get('avg_bopd', 0) or 0):>8,.1f}{flag}\n"
 
-    # --- Tank levels ---
     if any(w in q for w in ['tank', 'bac', 'stockage', 'volumebbls', 'niveau', 'bbls']):
         from apps.kpis.calculators import get_tank_levels
         tanks = get_tank_levels()
@@ -595,7 +724,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
                     f"| {t.get('date', '')} : {t.get('volume') or 0:,} BBL\n"
                 )
 
-    # --- Well operational status ---
     if any(w in q for w in ['statut', 'status', 'heures', 'prodhours',
                              'pression', 'choke', 'tubing', 'casing', 'pressure']):
         from apps.kpis.calculators import get_well_status_kpis
@@ -613,7 +741,6 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
                 context += f"  Tubing     : {latest.get('tubing_val') or 'N/A'} psig\n"
                 context += f"  Casing     : {latest.get('casing_val') or 'N/A'} psig\n"
 
-    # --- Well inventory ---
     if any(w in q for w in ['liste', 'tous les puits', 'combien', 'inventaire', 'list all', 'all wells']):
         from apps.warehouse.models import DimWell
         wells = DimWell.objects.all().order_by('well_code')
@@ -743,7 +870,6 @@ def build_chart_data(question):
 
 
 def detect_language(text):
-    """Detect question language. Returns 'ar', 'en', or 'fr'."""
     if not text:
         return 'fr'
     arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
@@ -788,9 +914,12 @@ MONTH_NAMES = {
         9: 'September', 10: 'October', 11: 'November', 12: 'December',
     },
     'ar': {
-        1: '\u064A\u0646\u0627\u064A\u0631', 2: '\u0641\u0628\u0631\u0627\u064A\u0631', 3: '\u0645\u0627\u0631\u0633', 4: '\u0623\u0628\u0631\u064A\u0644',
-        5: '\u0645\u0627\u064A\u0648', 6: '\u064A\u0648\u0646\u064A\u0648', 7: '\u064A\u0648\u0644\u064A\u0648', 8: '\u0623\u063A\u0633\u0637\u0633',
-        9: '\u0633\u0628\u062A\u0645\u0628\u0631', 10: '\u0623\u0643\u062A\u0648\u0628\u0631', 11: '\u0646\u0648\u0641\u0645\u0628\u0631', 12: '\u062F\u064A\u0633\u0645\u0628\u0631',
+        1: '\u064A\u0646\u0627\u064A\u0631', 2: '\u0641\u0628\u0631\u0627\u064A\u0631',
+        3: '\u0645\u0627\u0631\u0633', 4: '\u0623\u0628\u0631\u064A\u0644',
+        5: '\u0645\u0627\u064A\u0648', 6: '\u064A\u0648\u0646\u064A\u0648',
+        7: '\u064A\u0648\u0644\u064A\u0648', 8: '\u0623\u063A\u0633\u0637\u0633',
+        9: '\u0633\u0628\u062A\u0645\u0628\u0631', 10: '\u0623\u0643\u062A\u0648\u0628\u0631',
+        11: '\u0646\u0648\u0641\u0645\u0628\u0631', 12: '\u062F\u064A\u0633\u0645\u0628\u0631',
     },
 }
 
@@ -801,24 +930,16 @@ def format_month(month_num, year, lang):
 
 
 def _force_english_month_names(text):
-    """Normalize French month names to English in final English answers."""
     if not text:
         return text
     replacements = {
-        r'\bjanvier\b': 'January',
-        r'\bfévrier\b': 'February',
-        r'\bfevrier\b': 'February',
-        r'\bmars\b': 'March',
-        r'\bavril\b': 'April',
-        r'\bmai\b': 'May',
-        r'\bjuin\b': 'June',
-        r'\bjuillet\b': 'July',
-        r'\baoût\b': 'August',
-        r'\baout\b': 'August',
-        r'\bseptembre\b': 'September',
-        r'\boctobre\b': 'October',
-        r'\bnovembre\b': 'November',
-        r'\bdécembre\b': 'December',
+        r'\bjanvier\b': 'January', r'\bfévrier\b': 'February',
+        r'\bfevrier\b': 'February', r'\bmars\b': 'March',
+        r'\bavril\b': 'April', r'\bmai\b': 'May',
+        r'\bjuin\b': 'June', r'\bjuillet\b': 'July',
+        r'\baoût\b': 'August', r'\baout\b': 'August',
+        r'\bseptembre\b': 'September', r'\boctobre\b': 'October',
+        r'\bnovembre\b': 'November', r'\bdécembre\b': 'December',
         r'\bdecembre\b': 'December',
     }
     normalized = text
@@ -875,7 +996,6 @@ def _trend_direction(previous_oil, current_oil):
 def _sanitize_answer_language(answer, lang):
     if not answer:
         return answer
-    # Normalize frequent mixed-language section titles.
     replacements = {
         'fr': {
             r'\bExecutive Summary\b': 'Resume executif',
@@ -927,7 +1047,6 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
     total_days = sum(calendar.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
     avg_bopd = (total_oil / total_days) if total_days > 0 else 0.0
 
-    # Annual trend direction from first to last available month.
     first_oil = float(rows[0].get('total_oil', 0) or 0)
     last_oil = float(rows[-1].get('total_oil', 0) or 0)
     annual_direction = _localized_trend_word(_trend_direction(first_oil, last_oil), lang)
@@ -937,10 +1056,8 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
             'title': f"## \U0001F6E2\uFE0F Champ EZZAOUIA - Tendance de production du puits {well.well_code}",
             'summary': f"**Resume executif:** La tendance BOPD du puits {well.well_code} en {year} montre une production {annual_direction.lower()}, avec une moyenne de {avg_bopd:,.1f} STB/j.",
             'monthly': "### Historique mensuel de production",
-            'month_col_1': "Mois",
-            'month_col_2': "Huile (STB)",
-            'month_col_3': "BSW%",
-            'month_col_4': "Tendance",
+            'month_col_1': "Mois", 'month_col_2': "Huile (STB)",
+            'month_col_3': "BSW%", 'month_col_4': "Tendance",
             'analysis_title': "### Analyse technique",
             'analysis_body': f"La tendance de production du puits {well.well_code} en {year} montre une moyenne BOPD stable de {avg_bopd:,.1f} STB/j, avec des fluctuations mensuelles.",
             'reco_title': "### Recommandations",
@@ -952,10 +1069,8 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
             'title': f"## \U0001F6E2\uFE0F EZZAOUIA Field - Well {well.well_code} Production Trend",
             'summary': f"**Executive Summary:** The BOPD trend for well {well.well_code} in {year} shows {annual_direction.lower()} production, with an average of {avg_bopd:,.1f} STB/j.",
             'monthly': "### Monthly Production History",
-            'month_col_1': "Month",
-            'month_col_2': "Oil (STB)",
-            'month_col_3': "BSW%",
-            'month_col_4': "Trend",
+            'month_col_1': "Month", 'month_col_2': "Oil (STB)",
+            'month_col_3': "BSW%", 'month_col_4': "Trend",
             'analysis_title': "### Technical Analysis",
             'analysis_body': f"The production trend for {well.well_code} in {year} shows an average BOPD of {avg_bopd:,.1f} STB/j, with monthly fluctuations.",
             'reco_title': "### Recommendations",
@@ -967,12 +1082,10 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
             'title': f"## \U0001F6E2\uFE0F \u062d\u0642\u0644 EZZAOUIA - \u0627\u062a\u062c\u0627\u0647 \u0625\u0646\u062a\u0627\u062c \u0627\u0644\u0628\u0626\u0631 {well.well_code}",
             'summary': f"**\u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u062a\u0646\u0641\u064a\u0630\u064a:** \u064a\u064f\u0638\u0647\u0631 \u0627\u062a\u062c\u0627\u0647 BOPD \u0644\u0644\u0628\u0626\u0631 {well.well_code} \u0641\u064a {year} \u0625\u0646\u062a\u0627\u062c\u0627\u064b {annual_direction}\u060c \u0628\u0645\u062a\u0648\u0633\u0637 {avg_bopd:,.1f} STB/j.",
             'monthly': "### \u0627\u0644\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0634\u0647\u0631\u064a \u0644\u0644\u0625\u0646\u062a\u0627\u062c",
-            'month_col_1': "\u0627\u0644\u0634\u0647\u0631",
-            'month_col_2': "\u0627\u0644\u0646\u0641\u0637 (STB)",
-            'month_col_3': "BSW%",
-            'month_col_4': "\u0627\u0644\u0627\u062a\u062c\u0627\u0647",
+            'month_col_1': "\u0627\u0644\u0634\u0647\u0631", 'month_col_2': "\u0627\u0644\u0646\u0641\u0637 (STB)",
+            'month_col_3': "BSW%", 'month_col_4': "\u0627\u0644\u0627\u062a\u062c\u0627\u0647",
             'analysis_title': "### \u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u062a\u0642\u0646\u064a",
-            'analysis_body': f"\u064a\u064f\u0638\u0647\u0631 \u0627\u062a\u062c\u0627\u0647 \u0625\u0646\u062a\u0627\u062c \u0627\u0644\u0628\u0626\u0631 {well.well_code} \u0641\u064a {year} \u0645\u062a\u0648\u0633\u0637 BOPD \u0628\u0642\u064a\u0645\u0629 {avg_bopd:,.1f} STB/j \u0645\u0639 \u062a\u0630\u0628\u0630\u0628\u0627\u062a \u0634\u0647\u0631\u064a\u0629.",
+            'analysis_body': f"\u064a\u064f\u0638\u0647\u0631 \u0627\u062a\u062c\u0627\u0647 \u0625\u0646\u062a\u0627\u062c \u0627\u0628\u0626\u0631 {well.well_code} \u0641\u064a {year} \u0645\u062a\u0648\u0633\u0637 BOPD \u0628\u0642\u064a\u0645\u0629 {avg_bopd:,.1f} STB/j \u0645\u0639 \u062a\u0630\u0628\u0630\u0628\u0627\u062a \u0634\u0647\u0631\u064a\u0629.",
             'reco_title': "### \u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a",
             'reco_1': "\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0625\u0646\u062a\u0627\u062c: \u0627\u0644\u0627\u0633\u062a\u0645\u0631\u0627\u0631 \u0641\u064a \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0634\u0647\u0631\u064a\u0629 \u0648\u062a\u0639\u062f\u064a\u0644 \u0638\u0631\u0648\u0641 \u0627\u0644\u062a\u0634\u063a\u064a\u0644 \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629.",
             'reco_2': "\u0635\u064a\u0627\u0646\u0629 \u0627\u0644\u0628\u0626\u0631: \u062c\u062f\u0648\u0644\u0629 \u0635\u064a\u0627\u0646\u0629 \u0648\u0642\u0627\u0626\u064a\u0629 \u0644\u0644\u062d\u0641\u0627\u0638 \u0639\u0644\u0649 \u0627\u0633\u062a\u0642\u0631\u0627\u0631 \u0627\u0644\u0625\u0646\u062a\u0627\u062c.",
@@ -984,10 +1097,8 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
         return None
 
     lines = [
-        text['title'],
-        "",
-        text['summary'],
-        "",
+        text['title'], "",
+        text['summary'], "",
         text['monthly'],
         f"| {text['month_col_1']} | {text['month_col_2']} | {text['month_col_3']} | {text['month_col_4']} |",
         "|---|---:|---:|---|",
@@ -1002,15 +1113,11 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
         prev_oil = oil
 
     lines.extend([
-        "",
-        text['analysis_title'],
-        text['analysis_body'],
-        "",
+        "", text['analysis_title'], text['analysis_body'], "",
         text['reco_title'],
         f"1. {text['reco_1']}",
         f"2. {text['reco_2']}",
-        "",
-        text['source'],
+        "", text['source'],
     ])
     return "\n".join(lines)
 
@@ -1048,12 +1155,12 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
                 + (f" for well {well_code_str}" if well_ref else "")
                 + f" — {len(periods)} distinct period(s) identified."
             ),
-            'periods_title':  "### Periods identified",
-            'p_header':       "| # | Start | End | Days |",
-            'p_sep':          "|:-:|-------|-----|-----:|",
+            'periods_title': "### Periods identified",
+            'p_header': "| # | Start | End | Days |",
+            'p_sep': "|:-:|-------|-----|-----:|",
             'excerpts_title': "### Field note excerpts",
-            'e_header':       "| Date | Excerpt |",
-            'e_sep':          "|------|---------|",
+            'e_header': "| Date | Excerpt |",
+            'e_sep': "|------|---------|",
             'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
         },
         'fr': {
@@ -1063,12 +1170,12 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
                 + (f" pour le puits {well_code_str}" if well_ref else "")
                 + f" — {len(periods)} période(s) identifiée(s)."
             ),
-            'periods_title':  "### Périodes identifiées",
-            'p_header':       "| # | Début | Fin | Jours |",
-            'p_sep':          "|:-:|-------|-----|------:|",
+            'periods_title': "### Périodes identifiées",
+            'p_header': "| # | Début | Fin | Jours |",
+            'p_sep': "|:-:|-------|-----|------:|",
             'excerpts_title': "### Extraits des notes de terrain",
-            'e_header':       "| Date | Extrait |",
-            'e_sep':          "|------|---------|",
+            'e_header': "| Date | Extrait |",
+            'e_sep': "|------|---------|",
             'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
         },
         'ar': {
@@ -1078,47 +1185,37 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
                 + (f" للبئر {well_code_str}" if well_ref else "")
                 + f" — {len(periods)} فترة محددة."
             ),
-            'periods_title':  "### الفترات المحددة",
-            'p_header':       "| # | البداية | النهاية | الأيام |",
-            'p_sep':          "|:-:|---------|---------|-------:|",
+            'periods_title': "### الفترات المحددة",
+            'p_header': "| # | البداية | النهاية | الأيام |",
+            'p_sep': "|:-:|---------|---------|-------:|",
             'excerpts_title': "### مقتطفات من الملاحظات الميدانية",
-            'e_header':       "| التاريخ | المقتطف |",
-            'e_sep':          "|---------|---------|",
+            'e_header': "| التاريخ | المقتطف |",
+            'e_sep': "|---------|---------|",
             'source': f"*المصدر: EZZAOUIA DWH — DimDate.comments — {today_str}*",
         },
     }.get(lang, {
         'title': f"## 📋 Field Notes — {well_code_str}",
-        'found': (
-            f"{len(comments_rows)} records found"
-            + f" — {len(periods)} period(s)."
-        ),
-        'periods_title':  "### Periods identified",
-        'p_header':       "| # | Start | End | Days |",
-        'p_sep':          "|:-:|-------|-----|-----:|",
+        'found': f"{len(comments_rows)} records found — {len(periods)} period(s).",
+        'periods_title': "### Periods identified",
+        'p_header': "| # | Start | End | Days |",
+        'p_sep': "|:-:|-------|-----|-----:|",
         'excerpts_title': "### Field note excerpts",
-        'e_header':       "| Date | Excerpt |",
-        'e_sep':          "|------|---------|",
+        'e_header': "| Date | Excerpt |",
+        'e_sep': "|------|---------|",
         'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
     })
 
-    lines = [
-        L['title'],
-        L['found'],
-        "",
-        L['periods_title'],
-        L['p_header'],
-        L['p_sep'],
-    ]
+    lines = [L['title'], L['found'], "", L['periods_title'], L['p_header'], L['p_sep']]
 
     for i, period in enumerate(periods, 1):
         try:
             start = period[0]['date'][:10]
-            end   = period[-1]['date'][:10]
-            d1    = datetime.strptime(start, '%Y-%m-%d')
-            d2    = datetime.strptime(end,   '%Y-%m-%d')
-            days  = (d2 - d1).days + 1
+            end = period[-1]['date'][:10]
+            d1 = datetime.strptime(start, '%Y-%m-%d')
+            d2 = datetime.strptime(end, '%Y-%m-%d')
+            days = (d2 - d1).days + 1
             start_fmt = d1.strftime('%d/%m/%Y')
-            end_fmt   = d2.strftime('%d/%m/%Y')
+            end_fmt = d2.strftime('%d/%m/%Y')
         except Exception:
             start_fmt, end_fmt, days = start, end, '?'
         lines.append(f"| {i} | {start_fmt} | {end_fmt} | {days} |")
@@ -1127,8 +1224,7 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
 
     for row in comments_rows:
         try:
-            date_fmt = datetime.strptime(
-                row['date'][:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+            date_fmt = datetime.strptime(row['date'][:10], '%Y-%m-%d').strftime('%d/%m/%Y')
         except Exception:
             date_fmt = row['date'][:10]
         raw = row['comments'].replace('\n', ' ')
@@ -1140,15 +1236,11 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
             if not part:
                 continue
             part_lower = part.lower()
-            has_keyword = any(
-                w.lower() in part_lower for w in (search_words or []))
+            has_keyword = any(w.lower() in part_lower for w in (search_words or []))
             has_well = False
             if well_num_local:
-                well_mentions_local = re.findall(
-                    r'EZZ\s*#?\s*(\d+)', part, re.IGNORECASE)
-                has_well = well_num_local in [
-                    m for m in well_mentions_local if m == well_num_local
-                ]
+                well_mentions_local = re.findall(r'EZZ\s*#?\s*(\d+)', part, re.IGNORECASE)
+                has_well = well_num_local in [m for m in well_mentions_local if m == well_num_local]
             else:
                 has_well = True
             if has_keyword or has_well:
@@ -1160,19 +1252,11 @@ def _build_structured_comments_answer(question, comments_rows, lang, today_str,
         excerpt = excerpt.replace('|', '-').replace('\n', ' ')
         flag = ""
         if well_ref:
-            # Check if comment mentions a DIFFERENT well than the one asked
             num = re.search(r'\d+', well_code_str)
             if num:
-                # Build pattern that matches EZZ1, EZZ#1, EZZ# 1 as the ASKED well
-                asked_pattern = re.compile(
-                    rf'EZZ\s*#?\s*{num.group()}\b', re.IGNORECASE)
-                # Find ALL well mentions in the comment
-                all_wells = re.findall(
-                    r'EZZ\s*#?\s*\d+', row['comments'], re.IGNORECASE)
-                other_wells = [
-                    w for w in all_wells
-                    if not asked_pattern.search(w)
-                ]
+                asked_pattern = re.compile(rf'EZZ\s*#?\s*{num.group()}\b', re.IGNORECASE)
+                all_wells = re.findall(r'EZZ\s*#?\s*\d+', row['comments'], re.IGNORECASE)
+                other_wells = [w for w in all_wells if not asked_pattern.search(w)]
                 if other_wells and not asked_pattern.search(row['comments']):
                     flag = f" ⚠️ *refers to {other_wells[0]}*"
         lines.append(f"| {date_fmt} | {excerpt}{flag} |")
@@ -1275,6 +1359,37 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         langue_nom = {'fr': 'français', 'en': 'English', 'ar': 'عربي'}.get(lang, 'français')
 
         q_lower = question.lower().strip()
+
+        use_docs = True
+        use_sql = True
+
+        if 'from docs' in q_lower or 'from documents' in q_lower:
+            use_sql = False
+            use_docs = True
+            question = re.sub(
+                r'\s*(from docs|from documents)\s*$',
+                '', question, flags=re.IGNORECASE).strip()
+            q_lower = question.lower().strip()
+            logger.info("Source: DOCUMENTS ONLY")
+
+        elif 'from db' in q_lower or 'from database' in q_lower or 'from sql' in q_lower:
+            use_sql = True
+            use_docs = False
+            question = re.sub(
+                r'\s*(from db|from database|from sql)\s*$',
+                '', question, flags=re.IGNORECASE).strip()
+            q_lower = question.lower().strip()
+            logger.info("Source: DATABASE ONLY")
+
+        elif 'from both' in q_lower:
+            use_sql = True
+            use_docs = True
+            question = re.sub(
+                r'\s*from both\s*$', '',
+                question, flags=re.IGNORECASE).strip()
+            q_lower = question.lower().strip()
+            logger.info("Source: BOTH SQL + DOCS")
+
         salutations = ['bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'salam', 'merci',
                        'مرحبا', 'السلام عليكم', 'شكرا']
         if any(q_lower == s or q_lower.startswith(s + ' ') for s in salutations):
@@ -1296,7 +1411,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         logger.info(f"Question: {question[:120]}")
 
-        # Build enhanced search query
         search_query = question
         year_match = re.search(r'\b(20\d{2})\b', question)
         well_match = re.search(r'\b(ezz?\s*[-#]?\s*\d+)\b', question, re.IGNORECASE)
@@ -1314,6 +1428,13 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         ]
         needs_comments = any(kw in q_lower for kw in COMMENT_TRIGGER_KEYWORDS_EARLY)
 
+        DOC_PRIORITY_KEYWORDS = [
+            'tubing integrity', 'intégrité tubing', 'workover history',
+            'completion', 'casing', 'packer', 'wellbore', 'perforation',
+            'well history', 'historique puits',
+        ]
+        is_doc_priority = any(kw in q_lower for kw in DOC_PRIORITY_KEYWORDS)
+
         PRODUCTION_KEYWORDS_FOR_K = [
             'top', 'meilleur', 'classement', 'performer', 'production', 'bopd',
             'stb', 'total', 'barils', 'huile', 'oil', 'resume', 'résumé',
@@ -1323,12 +1444,35 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         is_doc_only_question = (
             not any(w in q_lower for w in PRODUCTION_KEYWORDS_FOR_K)
             or needs_comments
+            or is_doc_priority
         )
-        retrieval_k = 20 if is_doc_only_question else 6
-        logger.info(f"Retrieval k={retrieval_k} ({'doc/comments' if is_doc_only_question else 'production'})")
+
+        # ✅ FIX 2: Reduced k for doc-priority questions from 20 to 8.
+        # Fewer, more targeted chunks fit better within the 8192 context window
+        # and reduce noise that confuses the LLM.
+        if is_doc_priority:
+            retrieval_k = 8
+        elif is_doc_only_question:
+            retrieval_k = 10
+        else:
+            retrieval_k = 6
+
+        logger.info(f"Retrieval k={retrieval_k} ({'doc-priority' if is_doc_priority else 'doc/comments' if is_doc_only_question else 'production'})")
+
+        # Extract well number for targeted retrieval
+        detected_well_num = None
+        if well_match:
+            num = re.search(r'\d+', well_match.group(1))
+            if num:
+                detected_well_num = num.group()
+
         doc_results = retrieve_smart(
-            query=search_query, doc_id=doc_id, filename=filename, k=retrieval_k
+            query=search_query, doc_id=doc_id, filename=filename,
+            k=retrieval_k, well_num=detected_well_num
         )
+        logger.info(f"DOC RESULTS: {len(doc_results)} chunks")
+        for i, r in enumerate(doc_results[:5]):
+            logger.info(f"  Chunk {i+1}: [{r.metadata.get('filename','?')}] {r.page_content[:150]}")
 
         if doc_id and doc_results:
             combined = " ".join(d.page_content for d in doc_results[:3])
@@ -1349,10 +1493,16 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 doc_context += f"\n--- Source: {src} ---\n"
                 doc_context += "\n".join(chunks)
 
-        sql_context = get_sql_context(question)
+        # If user attached a specific file, skip SQL and DimDate entirely
+        if doc_id or doc_ids:
+            sql_context = ""
+            use_sql = False
+            needs_comments = False
+            logger.info("File attached — SQL and DimDate disabled, answering from attached file only")
+        else:
+            sql_context = get_sql_context(question) if use_sql else ""
         logger.info(f"SQL CONTEXT ({len(sql_context)} chars): {sql_context[:400] if sql_context else 'EMPTY'}")
 
-        # --- DimDate comment search ---
         comments_rows = []
         comments_context = ""
         if needs_comments:
@@ -1376,8 +1526,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 keyword_to_dates = {}
                 all_rows_map = {}
                 for word in search_words:
-                    rows = search_date_comments(
-                        keyword=word, well_code=well_code_str)
+                    rows = search_date_comments(keyword=word, well_code=well_code_str)
                     if rows:
                         keyword_to_dates[word] = {r['date'] for r in rows}
                         for r in rows:
@@ -1393,68 +1542,45 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     max_score = max(date_scores.values())
                     threshold = 2 if max_score >= 2 else 1
                     logger.info(f"max_score={max_score} threshold={threshold}")
-                    filtered_dates = {
-                        d for d, score in date_scores.items()
-                        if score >= threshold
-                    }
+                    filtered_dates = {d for d, score in date_scores.items() if score >= threshold}
                     comments_rows = sorted(
-                        [r for d, r in all_rows_map.items()
-                         if d in filtered_dates],
+                        [r for d, r in all_rows_map.items() if d in filtered_dates],
                         key=lambda x: x['date']
                     )
 
             elif well_code_str:
                 comments_rows = search_date_comments(well_code=well_code_str)
 
-            # Re-run with AND logic if OR returned too many results
             if len(comments_rows) > 8 and len(search_words) >= 2:
                 refined = search_date_comments_multi(
-                    keywords=search_words[:3],
-                    well_code=well_code_str
-                )
+                    keywords=search_words[:3], well_code=well_code_str)
                 if refined:
                     comments_rows = refined
                     logger.info(f"Refined with AND logic: {len(comments_rows)} rows")
 
             if search_words and comments_rows:
-                well_num_filter = re.search(r'\d+', well_code_str).group() \
-                    if well_code_str else None
+                well_num_filter = re.search(r'\d+', well_code_str).group() if well_code_str else None
 
                 def row_is_relevant(r):
                     text = r['comments']
                     text_lower = text.lower()
-
                     if not well_num_filter:
-                        return sum(1 for w in search_words
-                                   if w in text_lower) >= 2
-
-                    # Split comment into per-well sentences
+                        return sum(1 for w in search_words if w in text_lower) >= 2
                     parts = re.split(r';\*\s*|\.\*\s*|;\s*\*\s*', text)
-
-                    # For each part, check if it's about OUR well
-                    # AND contains at least one search keyword
                     relevant_score = 0
                     for part in parts:
                         part_lower = part.lower()
-                        well_nums_in_part = re.findall(
-                            r'EZZ\s*#?\s*(\d+)(?!\d)', part, re.IGNORECASE)
-                        is_our_well = well_num_filter in [
-                            m for m in well_nums_in_part
-                            if m == well_num_filter
-                        ]
+                        well_nums_in_part = re.findall(r'EZZ\s*#?\s*(\d+)(?!\d)', part, re.IGNORECASE)
+                        is_our_well = well_num_filter in [m for m in well_nums_in_part if m == well_num_filter]
                         if is_our_well:
-                            kw_in_part = sum(
-                                1 for w in search_words
-                                if w in part_lower)
+                            kw_in_part = sum(1 for w in search_words if w in part_lower)
                             relevant_score += kw_in_part
-
                     return relevant_score >= 2
 
                 filtered = [r for r in comments_rows if row_is_relevant(r)]
                 if filtered:
                     comments_rows = filtered
-                    logger.info(
-                        f"Post-filtered: {len(comments_rows)} rows")
+                    logger.info(f"Post-filtered: {len(comments_rows)} rows")
 
             logger.info(
                 f"DimDate comments found: {len(comments_rows)} rows "
@@ -1468,7 +1594,29 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 comments_context += "=== END COMMENTS ===\n"
                 logger.info(f"DimDate comments injected: {len(comments_rows)} rows")
 
-        # Block PDF data when SQL has authoritative production data
+        FIELD_WIDE_DOC_KEYWORDS = [
+            'all wells', 'tous les puits', 'chaque puits', 'every well',
+            'for each well', 'summary table', 'tableau', 'summarize',
+            'résumé de tous', 'current status of all',
+        ]
+        is_field_wide_doc = any(kw in q_lower for kw in FIELD_WIDE_DOC_KEYWORDS)
+
+        if is_field_wide_doc:
+            ALL_WELL_NUMS = ['1', '2', '3', '4', '5', '6', '7', '8',
+                             '9', '10', '11', '12', '14', '15', '16', '17', '18']
+            per_well_context = "FIELD-WIDE RAG CONTEXT:\n" + "=" * 50 + "\n"
+            for wnum in ALL_WELL_NUMS:
+                well_query = f"EZZ{wnum} {question}"
+                results = retrieve_smart(query=well_query, k=5, well_num=wnum)
+                per_well_context += f"\n[EZZ-{wnum.zfill(2)}]\n"
+                if results:
+                    for r in results[:2]:
+                        per_well_context += r.page_content[:300] + "\n"
+                else:
+                    per_well_context += "  No chunks found.\n"
+            doc_context = per_well_context
+            logger.info("Field-wide RAG: done")
+
         sql_has_data = bool(sql_context and len(sql_context.strip()) > 50)
         production_keywords = [
             'top', 'meilleur', 'classement', 'performer', 'production', 'bopd',
@@ -1477,14 +1625,24 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             'wct', 'bsw', 'gor', 'water cut', 'reservoir', 'réservoir',
         ]
         has_production_question = any(w in q_lower for w in production_keywords)
-        if sql_has_data and has_production_question and not needs_comments:
+        if not use_docs:
             doc_context = ""
-            logger.info("SQL data authoritative for production question — documents excluded from prompt")
+            logger.info("Documents excluded by user request")
+        elif sql_has_data and has_production_question and not needs_comments and not is_doc_priority and len(sql_context.strip()) > 200:
+            doc_context = ""
+            logger.info("SQL data authoritative — documents excluded")
 
         history_text = ""
+        # Only include history if it's about the same well to avoid cross-contamination
         if history and len(history) > 0:
             last = history[-1]
-            history_text = f"\n=== PREVIOUS EXCHANGE ===\nQ: {last['question']}\nA: {last['answer'][:300]}...\n"
+            last_q = last.get('question', '').lower()
+            current_q = question.lower()
+            # Only include if same well is mentioned in both questions
+            well_in_last = re.search(r'ezz\s*#?\s*(\d+)', last_q)
+            well_in_current = re.search(r'ezz\s*#?\s*(\d+)', current_q)
+            if well_in_last and well_in_current and well_in_last.group(1) == well_in_current.group(1):
+                history_text = f"\n=== PREVIOUS EXCHANGE ===\nQ: {last['question']}\nA: {last['answer'][:200]}...\n"
 
         from .memory import get_user_memory, update_user_memory
         memory_context = get_user_memory(user) if user else ""
@@ -1522,41 +1680,50 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 "Ne jamais basculer vers l'anglais ou l'arabe."
             )
 
+        # ✅ FIX 3: Truncate doc_context to avoid exceeding num_ctx.
+        # Keep the most relevant chunks (first 4000 chars) so the LLM
+        # always sees real context rather than a truncated/empty prompt.
+        MAX_DOC_CONTEXT_CHARS = 3000
+        if len(doc_context) > MAX_DOC_CONTEXT_CHARS:
+            doc_context = doc_context[:MAX_DOC_CONTEXT_CHARS] + "\n[... context truncated for length ...]"
+            logger.info(f"Doc context truncated to {MAX_DOC_CONTEXT_CHARS} chars")
+
+        MAX_SQL_CONTEXT_CHARS = 1000
+        if len(sql_context) > MAX_SQL_CONTEXT_CHARS:
+            sql_context = sql_context[:MAX_SQL_CONTEXT_CHARS] + "\n[... sql context truncated ...]"
+
+        logger.info(f"FINAL CONTEXT IN PROMPT - DOC: {len(doc_context)} chars, SQL: {len(sql_context)} chars")
+
         prompt = f"""{lang_instruction}
 
 {SYSTEM_PROMPT.replace('{TODAY}', today_str)}
 
 ════════════════════════════════════════════════════
-CONTEXT FOR THIS RESPONSE
-════════════════════════════════════════════════════
-DATE: {today_str}
+CONTEXT FOR THIS RESPONSE — DATE: {today_str}
 RESPONSE LANGUAGE: {langue_nom}
-SOURCE LINE (use verbatim): {source_line}
 {top_n_rule}
+════════════════════════════════════════════════════
 
-=== OPERATOR FIELD COMMENTS — DimDate (PRIMARY SOURCE for activity/period questions) ===
-{comments_context if comments_context else "No operator comments found for this query."}
-=== END OPERATOR COMMENTS ===
+=== OPERATOR FIELD COMMENTS ===
+{comments_context if comments_context else "None."}
 
-=== SQL DATABASE CONTEXT (AUTHORITATIVE for production numbers only) ===
-{sql_context if sql_context else "No SQL data available for this query."}
-=== END SQL CONTEXT ===
-
-=== DOCUMENT CONTEXT (qualitative reference) ===
-{doc_context if doc_context else "No documents attached."}
-=== END DOCUMENT CONTEXT ===
-
-=== INDEXED DOCUMENTS AVAILABLE ===
-{docs_list}
-=== END DOCUMENTS LIST ===
+=== SQL DATABASE CONTEXT ===
+{sql_context if sql_context else "None."}
 
 {history_text}{memory_context}
 
 ════════════════════════════════════════════════════
+=== DOCUMENT CONTEXT — READ THIS AND ANSWER FROM IT ===
+{doc_context if doc_context else "No documents attached."}
+=== END DOCUMENT CONTEXT ===
+
+⚠️ Answer ONLY from the DOCUMENT CONTEXT above.
+NEVER say "collapsed wellbore" unless those exact words appear above.
+If context is empty say: "The indexed documents do not contain specific information about this query."
+
 QUESTION: {question}
 ════════════════════════════════════════════════════"""
 
-        # If comments found — return structured answer, skip Ollama entirely
         if comments_rows:
             structured = _build_structured_comments_answer(
                 question, comments_rows, lang, today_str,
@@ -1569,10 +1736,12 @@ QUESTION: {question}
                 return {
                     'answer': structured,
                     'chart_data': None,
-                    'suggestions': generate_suggestions(
-                        question, well=well, lang=lang),
+                    'suggestions': generate_suggestions(question, well=well, lang=lang),
                 }
 
+        logger.info(f"PROMPT FIRST 500: {prompt[:500]}")
+        logger.info(f"DOC CONTEXT SAMPLE: {doc_context[:300]}")
+        logger.info(f"PROMPT LAST 500: {prompt[-500:]}")
         response = get_llm().invoke(prompt)
         answer = response.strip()
         if lang == 'en':

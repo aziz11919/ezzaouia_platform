@@ -137,7 +137,9 @@ RESPONSE FORMAT — SELECT BASED ON QUESTION TYPE
 ══════════════════════════════════════════════════════
 ABSOLUTE RULES — NEVER VIOLATE
 ══════════════════════════════════════════════════════
-1. USE ONLY numbers from SQL context — NEVER invent or estimate values
+1. USE ONLY numbers from SQL context for production figures (BOPD, STB, BSW...).
+   For activity periods, dates, and operational events — use the OPERATOR FIELD
+   COMMENTS block. If comments are present and relevant, answer from them directly.
 2. NEVER show placeholder rows like "EZZ..000.0" — only real data rows
 3. NEVER show empty table rows — skip rows with no data
 4. ALWAYS include units: STB/j, MSCF/j, %, SCF/STB, BBL, psig, °F
@@ -152,6 +154,14 @@ ABSOLUTE RULES — NEVER VIOLATE
 13. For field analysis → always compare to field average as benchmark
 14. Production trends → quantify: "declined by 23% over Q3 2025" not "production declined"
 15. Replace {TODAY} in source line with actual date from DATE variable
+16. If the answer to a question is not found in the SQL context, document
+    context, or operator comments — respond exactly:
+    "No information found in the indexed documents for this query."
+    NEVER invent, guess, or approximate an answer.
+17. For questions about periods, dates, or durations of field activities
+    (monitoring, workover, shut-in, consulting...) — use ONLY the operator
+    comments from DimDate. If no comments are found, say:
+    "No operator log entries found for this activity in the database."
 """
 
 KEYWORDS = [
@@ -185,11 +195,11 @@ def get_llm():
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
-            num_ctx=8192,
-            num_predict=3000,
+            num_ctx=4096,
+            num_predict=1000,
             top_p=0.85,
             repeat_penalty=1.15,
-            timeout=240,
+            timeout=180,
         )
     return _llm
 
@@ -320,6 +330,98 @@ def _get_date_comments(date_value):
     except Exception as e:
         logger.warning(f"DimDate comments fetch error: {e}")
     return None
+
+
+def search_date_comments(keyword: str = None, well_code: str = None,
+                         limit: int = 200) -> list:
+    """
+    Search DimDate.comments for entries matching a keyword and/or well code.
+    Returns list of {date, comments} dicts ordered by date ASC.
+    """
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            conditions = ["comments IS NOT NULL", "LTRIM(RTRIM(comments)) != ''"]
+            params = []
+            if keyword:
+                conditions.append("comments LIKE %s")
+                params.append(f"%{keyword}%")
+            if well_code:
+                num = re.search(r'\d+', well_code)
+                if num:
+                    n = num.group()
+                    # Match EZZ#1 or EZZ# 1 but NOT EZZ#10, EZZ#11 etc.
+                    # Use word boundary approach: number must not be followed
+                    # by another digit
+                    conditions.append(
+                        "(comments LIKE %s OR comments LIKE %s OR comments LIKE %s)"
+                    )
+                    params.append(f"%EZZ#{n}[^0-9]%")
+                    params.append(f"%EZZ# {n}[^0-9]%")
+                    params.append(f"%EZZ#{n}")
+                else:
+                    conditions.append("comments LIKE %s")
+                    params.append(f"%{well_code}%")
+            where = " AND ".join(conditions)
+            cursor.execute(
+                f"SELECT TOP {limit} FullDate, comments "
+                f"FROM dbo.DimDate "
+                f"WHERE {where} "
+                f"ORDER BY FullDate ASC",
+                params
+            )
+            rows = cursor.fetchall()
+            return [{"date": str(row[0]), "comments": str(row[1]).strip()}
+                    for row in rows]
+    except Exception as e:
+        logger.warning(f"DimDate search error: {e}")
+        return []
+
+
+def search_date_comments_multi(keywords: list, well_code: str = None,
+                                limit: int = 50) -> list:
+    """
+    Search DimDate.comments for entries matching ALL keywords (AND logic).
+    Much more precise than OR-based search.
+    """
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            conditions = ["comments IS NOT NULL", "LTRIM(RTRIM(comments)) != ''"]
+            params = []
+            for kw in keywords:
+                conditions.append("comments LIKE %s")
+                params.append(f"%{kw}%")
+            if well_code:
+                num = re.search(r'\d+', well_code)
+                if num:
+                    n = num.group()
+                    # Match EZZ#1 or EZZ# 1 but NOT EZZ#10, EZZ#11 etc.
+                    # Use word boundary approach: number must not be followed
+                    # by another digit
+                    conditions.append(
+                        "(comments LIKE %s OR comments LIKE %s OR comments LIKE %s)"
+                    )
+                    params.append(f"%EZZ#{n}[^0-9]%")
+                    params.append(f"%EZZ# {n}[^0-9]%")
+                    params.append(f"%EZZ#{n}")
+                else:
+                    conditions.append("comments LIKE %s")
+                    params.append(f"%{well_code}%")
+            where = " AND ".join(conditions)
+            cursor.execute(
+                f"SELECT TOP {limit} FullDate, comments "
+                f"FROM dbo.DimDate "
+                f"WHERE {where} "
+                f"ORDER BY FullDate ASC",
+                params
+            )
+            rows = cursor.fetchall()
+            return [{"date": str(row[0]), "comments": str(row[1]).strip()}
+                    for row in rows]
+    except Exception as e:
+        logger.warning(f"DimDate multi search error: {e}")
+        return []
 
 
 def get_sql_context(question):
@@ -913,6 +1015,172 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
     return "\n".join(lines)
 
 
+def _build_structured_comments_answer(question, comments_rows, lang, today_str,
+                                      search_words=None):
+    if not comments_rows:
+        return None
+
+    well_ref = normalize_well_code(question)
+    well_code_str = well_ref.well_code if well_ref else "FIELD"
+
+    from datetime import datetime
+
+    periods = []
+    current_period = [comments_rows[0]]
+    for row in comments_rows[1:]:
+        try:
+            prev_date = datetime.strptime(current_period[-1]['date'][:10], '%Y-%m-%d')
+            curr_date = datetime.strptime(row['date'][:10], '%Y-%m-%d')
+            if (curr_date - prev_date).days <= 5:
+                current_period.append(row)
+            else:
+                periods.append(current_period)
+                current_period = [row]
+        except Exception:
+            current_period.append(row)
+    periods.append(current_period)
+
+    L = {
+        'en': {
+            'title': f"## 📋 Field Notes — {well_code_str}",
+            'found': (
+                f"{len(comments_rows)} records found in DimDate field notes"
+                + (f" for well {well_code_str}" if well_ref else "")
+                + f" — {len(periods)} distinct period(s) identified."
+            ),
+            'periods_title':  "### Periods identified",
+            'p_header':       "| # | Start | End | Days |",
+            'p_sep':          "|:-:|-------|-----|-----:|",
+            'excerpts_title': "### Field note excerpts",
+            'e_header':       "| Date | Excerpt |",
+            'e_sep':          "|------|---------|",
+            'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
+        },
+        'fr': {
+            'title': f"## 📋 Notes de terrain — {well_code_str}",
+            'found': (
+                f"{len(comments_rows)} entrées trouvées dans DimDate"
+                + (f" pour le puits {well_code_str}" if well_ref else "")
+                + f" — {len(periods)} période(s) identifiée(s)."
+            ),
+            'periods_title':  "### Périodes identifiées",
+            'p_header':       "| # | Début | Fin | Jours |",
+            'p_sep':          "|:-:|-------|-----|------:|",
+            'excerpts_title': "### Extraits des notes de terrain",
+            'e_header':       "| Date | Extrait |",
+            'e_sep':          "|------|---------|",
+            'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
+        },
+        'ar': {
+            'title': f"## 📋 ملاحظات ميدانية — {well_code_str}",
+            'found': (
+                f"تم العثور على {len(comments_rows)} سجلاً في DimDate"
+                + (f" للبئر {well_code_str}" if well_ref else "")
+                + f" — {len(periods)} فترة محددة."
+            ),
+            'periods_title':  "### الفترات المحددة",
+            'p_header':       "| # | البداية | النهاية | الأيام |",
+            'p_sep':          "|:-:|---------|---------|-------:|",
+            'excerpts_title': "### مقتطفات من الملاحظات الميدانية",
+            'e_header':       "| التاريخ | المقتطف |",
+            'e_sep':          "|---------|---------|",
+            'source': f"*المصدر: EZZAOUIA DWH — DimDate.comments — {today_str}*",
+        },
+    }.get(lang, {
+        'title': f"## 📋 Field Notes — {well_code_str}",
+        'found': (
+            f"{len(comments_rows)} records found"
+            + f" — {len(periods)} period(s)."
+        ),
+        'periods_title':  "### Periods identified",
+        'p_header':       "| # | Start | End | Days |",
+        'p_sep':          "|:-:|-------|-----|-----:|",
+        'excerpts_title': "### Field note excerpts",
+        'e_header':       "| Date | Excerpt |",
+        'e_sep':          "|------|---------|",
+        'source': f"*Source: EZZAOUIA DWH — DimDate.comments — {today_str}*",
+    })
+
+    lines = [
+        L['title'],
+        L['found'],
+        "",
+        L['periods_title'],
+        L['p_header'],
+        L['p_sep'],
+    ]
+
+    for i, period in enumerate(periods, 1):
+        try:
+            start = period[0]['date'][:10]
+            end   = period[-1]['date'][:10]
+            d1    = datetime.strptime(start, '%Y-%m-%d')
+            d2    = datetime.strptime(end,   '%Y-%m-%d')
+            days  = (d2 - d1).days + 1
+            start_fmt = d1.strftime('%d/%m/%Y')
+            end_fmt   = d2.strftime('%d/%m/%Y')
+        except Exception:
+            start_fmt, end_fmt, days = start, end, '?'
+        lines.append(f"| {i} | {start_fmt} | {end_fmt} | {days} |")
+
+    lines += ["", L['excerpts_title'], L['e_header'], L['e_sep']]
+
+    for row in comments_rows:
+        try:
+            date_fmt = datetime.strptime(
+                row['date'][:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+        except Exception:
+            date_fmt = row['date'][:10]
+        raw = row['comments'].replace('\n', ' ')
+        parts = re.split(r';\*\s*|\.\*\s*', raw)
+        well_num_local = re.search(r'\d+', well_code_str).group() if well_ref else None
+        relevant_parts = []
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            part_lower = part.lower()
+            has_keyword = any(
+                w.lower() in part_lower for w in (search_words or []))
+            has_well = False
+            if well_num_local:
+                well_mentions_local = re.findall(
+                    r'EZZ\s*#?\s*(\d+)', part, re.IGNORECASE)
+                has_well = well_num_local in [
+                    m for m in well_mentions_local if m == well_num_local
+                ]
+            else:
+                has_well = True
+            if has_keyword or has_well:
+                relevant_parts.append(part)
+        if relevant_parts:
+            excerpt = ' | '.join(relevant_parts)[:400]
+        else:
+            excerpt = raw[:200]
+        excerpt = excerpt.replace('|', '-').replace('\n', ' ')
+        flag = ""
+        if well_ref:
+            # Check if comment mentions a DIFFERENT well than the one asked
+            num = re.search(r'\d+', well_code_str)
+            if num:
+                # Build pattern that matches EZZ1, EZZ#1, EZZ# 1 as the ASKED well
+                asked_pattern = re.compile(
+                    rf'EZZ\s*#?\s*{num.group()}\b', re.IGNORECASE)
+                # Find ALL well mentions in the comment
+                all_wells = re.findall(
+                    r'EZZ\s*#?\s*\d+', row['comments'], re.IGNORECASE)
+                other_wells = [
+                    w for w in all_wells
+                    if not asked_pattern.search(w)
+                ]
+                if other_wells and not asked_pattern.search(row['comments']):
+                    flag = f" ⚠️ *refers to {other_wells[0]}*"
+        lines.append(f"| {date_fmt} | {excerpt}{flag} |")
+
+    lines += ["", "---", L['source']]
+    return "\n".join(lines)
+
+
 def generate_suggestions(question, well=None, lang='fr'):
     q = question.lower()
     lang = lang if lang in {'fr', 'en', 'ar'} else 'fr'
@@ -1037,7 +1305,30 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         if well_match:
             search_query += f" {well_match.group(1)} workover intervention performance"
 
-        doc_results = retrieve_smart(query=search_query, doc_id=doc_id, filename=filename, k=6)
+        COMMENT_TRIGGER_KEYWORDS_EARLY = [
+            'comment', 'remarque', 'note', 'period', 'période', 'during',
+            'pendant', 'quand', 'when', 'monitoring', 'surveillance',
+            'consulting', 'intervention', 'activit', 'operat', 'travaux',
+            'srp', 'workover', 'shut-in', 'shut in', 'fermeture', 'reprise',
+            'depuis', 'depuis quand', 'how long', 'combien de temps',
+        ]
+        needs_comments = any(kw in q_lower for kw in COMMENT_TRIGGER_KEYWORDS_EARLY)
+
+        PRODUCTION_KEYWORDS_FOR_K = [
+            'top', 'meilleur', 'classement', 'performer', 'production', 'bopd',
+            'stb', 'total', 'barils', 'huile', 'oil', 'resume', 'résumé',
+            'bilan', 'global', 'champ', 'field', 'kpi', 'performance',
+            'wct', 'bsw', 'gor', 'water cut', 'reservoir', 'réservoir',
+        ]
+        is_doc_only_question = (
+            not any(w in q_lower for w in PRODUCTION_KEYWORDS_FOR_K)
+            or needs_comments
+        )
+        retrieval_k = 20 if is_doc_only_question else 6
+        logger.info(f"Retrieval k={retrieval_k} ({'doc/comments' if is_doc_only_question else 'production'})")
+        doc_results = retrieve_smart(
+            query=search_query, doc_id=doc_id, filename=filename, k=retrieval_k
+        )
 
         if doc_id and doc_results:
             combined = " ".join(d.page_content for d in doc_results[:3])
@@ -1061,6 +1352,122 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         sql_context = get_sql_context(question)
         logger.info(f"SQL CONTEXT ({len(sql_context)} chars): {sql_context[:400] if sql_context else 'EMPTY'}")
 
+        # --- DimDate comment search ---
+        comments_rows = []
+        comments_context = ""
+        if needs_comments:
+            well_ref_c = normalize_well_code(question)
+            well_code_str = well_ref_c.well_code if well_ref_c else None
+
+            stop_words = {
+                'the', 'le', 'la', 'les', 'de', 'du', 'des', 'un', 'une',
+                'a', 'an', 'in', 'on', 'at', 'for', 'of', 'with', 'and',
+                'que', 'qui', 'quoi', 'quel', 'quelle', 'pendant', 'durant',
+                'during', 'when', 'give', 'me', 'show', 'tell', 'what',
+                'period', 'periode', 'well', 'puits', 'was', 'is', 'were',
+                'production', 'ezz', 'which', 'i', 'my', 'how', 'long',
+                'depuis', 'quand', 'get', 'did', 'the',
+            }
+            words = re.findall(r'\b\w{3,}\b', question.lower())
+            search_words = [w for w in words if w not in stop_words]
+            logger.info(f"Comment search_words: {search_words}")
+
+            if well_code_str and search_words:
+                keyword_to_dates = {}
+                all_rows_map = {}
+                for word in search_words:
+                    rows = search_date_comments(
+                        keyword=word, well_code=well_code_str)
+                    if rows:
+                        keyword_to_dates[word] = {r['date'] for r in rows}
+                        for r in rows:
+                            all_rows_map[r['date']] = r
+
+                logger.info(f"Keywords matched: {list(keyword_to_dates.keys())}")
+
+                if keyword_to_dates:
+                    date_scores = {}
+                    for word, dates in keyword_to_dates.items():
+                        for d in dates:
+                            date_scores[d] = date_scores.get(d, 0) + 1
+                    max_score = max(date_scores.values())
+                    threshold = 2 if max_score >= 2 else 1
+                    logger.info(f"max_score={max_score} threshold={threshold}")
+                    filtered_dates = {
+                        d for d, score in date_scores.items()
+                        if score >= threshold
+                    }
+                    comments_rows = sorted(
+                        [r for d, r in all_rows_map.items()
+                         if d in filtered_dates],
+                        key=lambda x: x['date']
+                    )
+
+            elif well_code_str:
+                comments_rows = search_date_comments(well_code=well_code_str)
+
+            # Re-run with AND logic if OR returned too many results
+            if len(comments_rows) > 8 and len(search_words) >= 2:
+                refined = search_date_comments_multi(
+                    keywords=search_words[:3],
+                    well_code=well_code_str
+                )
+                if refined:
+                    comments_rows = refined
+                    logger.info(f"Refined with AND logic: {len(comments_rows)} rows")
+
+            if search_words and comments_rows:
+                well_num_filter = re.search(r'\d+', well_code_str).group() \
+                    if well_code_str else None
+
+                def row_is_relevant(r):
+                    text = r['comments']
+                    text_lower = text.lower()
+
+                    if not well_num_filter:
+                        return sum(1 for w in search_words
+                                   if w in text_lower) >= 2
+
+                    # Split comment into per-well sentences
+                    parts = re.split(r';\*\s*|\.\*\s*|;\s*\*\s*', text)
+
+                    # For each part, check if it's about OUR well
+                    # AND contains at least one search keyword
+                    relevant_score = 0
+                    for part in parts:
+                        part_lower = part.lower()
+                        well_nums_in_part = re.findall(
+                            r'EZZ\s*#?\s*(\d+)(?!\d)', part, re.IGNORECASE)
+                        is_our_well = well_num_filter in [
+                            m for m in well_nums_in_part
+                            if m == well_num_filter
+                        ]
+                        if is_our_well:
+                            kw_in_part = sum(
+                                1 for w in search_words
+                                if w in part_lower)
+                            relevant_score += kw_in_part
+
+                    return relevant_score >= 2
+
+                filtered = [r for r in comments_rows if row_is_relevant(r)]
+                if filtered:
+                    comments_rows = filtered
+                    logger.info(
+                        f"Post-filtered: {len(comments_rows)} rows")
+
+            logger.info(
+                f"DimDate comments found: {len(comments_rows)} rows "
+                f"for well={well_code_str}, words={search_words}"
+            )
+
+            if comments_rows:
+                comments_context += "\n=== FIELD OPERATOR COMMENTS ===\n"
+                for row in comments_rows:
+                    comments_context += f"  {row['date']} : {row['comments']}\n"
+                comments_context += "=== END COMMENTS ===\n"
+                logger.info(f"DimDate comments injected: {len(comments_rows)} rows")
+
         # Block PDF data when SQL has authoritative production data
         sql_has_data = bool(sql_context and len(sql_context.strip()) > 50)
         production_keywords = [
@@ -1070,7 +1477,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             'wct', 'bsw', 'gor', 'water cut', 'reservoir', 'réservoir',
         ]
         has_production_question = any(w in q_lower for w in production_keywords)
-        if sql_has_data and has_production_question:
+        if sql_has_data and has_production_question and not needs_comments:
             doc_context = ""
             logger.info("SQL data authoritative for production question — documents excluded from prompt")
 
@@ -1127,11 +1534,15 @@ RESPONSE LANGUAGE: {langue_nom}
 SOURCE LINE (use verbatim): {source_line}
 {top_n_rule}
 
-=== SQL DATABASE CONTEXT (AUTHORITATIVE — use these numbers exclusively) ===
+=== OPERATOR FIELD COMMENTS — DimDate (PRIMARY SOURCE for activity/period questions) ===
+{comments_context if comments_context else "No operator comments found for this query."}
+=== END OPERATOR COMMENTS ===
+
+=== SQL DATABASE CONTEXT (AUTHORITATIVE for production numbers only) ===
 {sql_context if sql_context else "No SQL data available for this query."}
 === END SQL CONTEXT ===
 
-=== DOCUMENT CONTEXT (qualitative reference only — never override SQL numbers) ===
+=== DOCUMENT CONTEXT (qualitative reference) ===
 {doc_context if doc_context else "No documents attached."}
 === END DOCUMENT CONTEXT ===
 
@@ -1144,6 +1555,23 @@ SOURCE LINE (use verbatim): {source_line}
 ════════════════════════════════════════════════════
 QUESTION: {question}
 ════════════════════════════════════════════════════"""
+
+        # If comments found — return structured answer, skip Ollama entirely
+        if comments_rows:
+            structured = _build_structured_comments_answer(
+                question, comments_rows, lang, today_str,
+                search_words=search_words if needs_comments else None
+            )
+            if structured:
+                well = normalize_well_code(question)
+                if user:
+                    update_user_memory(user, question, structured, well=well)
+                return {
+                    'answer': structured,
+                    'chart_data': None,
+                    'suggestions': generate_suggestions(
+                        question, well=well, lang=lang),
+                }
 
         response = get_llm().invoke(prompt)
         answer = response.strip()

@@ -152,35 +152,39 @@ class EzzaouiaReportGenerator:
             y = start_y - row * (box_h + 8 * mm)
             self._draw_kpi_box(x, y, box_w, box_h, key, label, unit)
 
-        c.setFont("Helvetica", 9.5)
-        c.setFillColor(self.text_muted)
-        c.drawString(
-            20 * mm,
-            self.page_height - 158 * mm,
-            (
-                f"Imported files checked: {len(self.month_imported_files)}"
-                f" | file anomalies detected: {len(self.imported_file_anomalies)}"
-            ),
-        )
-
-        c.setFont("Helvetica-Bold", 12)
-        c.setFillColor(self.text_dark)
-        c.drawString(20 * mm, self.page_height - 165 * mm, "Critical anomalies of the month")
-
         anomalies = self._critical_anomalies(self.all_anomalies)
-        c.setFont("Helvetica", 10)
-        y = self.page_height - 174 * mm
-        if anomalies:
-            for anomaly in anomalies[:7]:
-                text = self._anomaly_line(anomaly, max_len=120)
-                c.setFillColor(self.text_dark)
-                c.drawString(22 * mm, y, f"- {text}")
-                y -= 7 * mm
-                if y < 30 * mm:
-                    break
-        else:
+        has_file_or_anomaly_data = bool(self.month_imported_files or anomalies)
+        y = self.page_height - 158 * mm
+
+        if has_file_or_anomaly_data:
+            c.setFont("Helvetica", 9.5)
             c.setFillColor(self.text_muted)
-            c.drawString(22 * mm, y, "No critical anomalies detected in this period.")
+            c.drawString(
+                20 * mm,
+                y,
+                (
+                    f"Imported files checked: {len(self.month_imported_files)}"
+                    f" | file anomalies detected: {len(self.imported_file_anomalies)}"
+                ),
+            )
+
+            c.setFont("Helvetica-Bold", 12)
+            c.setFillColor(self.text_dark)
+            c.drawString(20 * mm, self.page_height - 165 * mm, "Critical anomalies of the month")
+
+            c.setFont("Helvetica", 10)
+            y = self.page_height - 174 * mm
+            if anomalies:
+                for anomaly in anomalies[:7]:
+                    text = self._anomaly_line(anomaly, max_len=120)
+                    c.setFillColor(self.text_dark)
+                    c.drawString(22 * mm, y, f"- {text}")
+                    y -= 7 * mm
+                    if y < 30 * mm:
+                        break
+            else:
+                c.setFillColor(self.text_muted)
+                c.drawString(22 * mm, y, "No critical anomalies detected in this period.")
 
         if self.month_comments:
             self._draw_remarks_box(y - 8 * mm, self.month_comments)
@@ -412,29 +416,39 @@ class EzzaouiaReportGenerator:
         return None
 
     def _draw_remarks_box(self, y_top, text):
-        """Draw a highlighted note box with field operator remarks."""
+        """Draw a highlighted note box with field operator remarks, one bullet per comment."""
         if y_top < 38 * mm:
             return
         c = self.canvas
         box_x = 20 * mm
         box_w = self.page_width - 40 * mm
+        max_text_w = float(box_w - 14 * mm)
 
-        words = text.split()
-        lines, current = [], ""
-        for word in words:
-            test = (current + " " + word).strip()
-            if c.stringWidth(test, "Helvetica", 9) < float(box_w - 8 * mm):
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
+        comments = [s.strip() for s in text.split("*") if s.strip()]
+        if not comments:
+            return
+
+        def wrap_comment(comment_text):
+            words = comment_text.split()
+            lines, current = [], ""
+            for word in words:
+                test = (current + " " + word).strip()
+                if c.stringWidth(test, "Helvetica", 9) < max_text_w:
+                    current = test
+                else:
+                    if current:
+                        lines.append(current)
+                    current = word
+            if current:
+                lines.append(current)
+            return lines or [""]
+
+        wrapped = [wrap_comment(comment) for comment in comments]
+        total_lines = sum(len(ls) for ls in wrapped)
 
         line_h = 5 * mm
         label_h = 7 * mm
-        box_h = label_h + len(lines) * line_h + 5 * mm
+        box_h = label_h + total_lines * line_h + 5 * mm
 
         if y_top - box_h < 20 * mm:
             return
@@ -447,14 +461,18 @@ class EzzaouiaReportGenerator:
         date_label = f"{MONTHS_FR.get(self.month, str(self.month))} {self.year}"
         c.setFillColor(colors.HexColor("#F57F17"))
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(box_x + 3 * mm, y_top - label_h + 2 * mm, f"Remarques journalieres — {date_label}")
+        c.drawString(box_x + 3 * mm, y_top - label_h + 2 * mm, f"Field remarks — {date_label}")
 
-        c.setFillColor(self.text_dark)
         c.setFont("Helvetica", 9)
         text_y = y_top - label_h - 3 * mm
-        for line in lines:
-            c.drawString(box_x + 3 * mm, text_y, line)
+        for lines in wrapped:
+            c.setFillColor(self.text_dark)
+            c.drawString(box_x + 3 * mm, text_y, f"• {lines[0]}")
             text_y -= line_h
+            c.setFillColor(self.text_dark)
+            for continuation in lines[1:]:
+                c.drawString(box_x + 9 * mm, text_y, continuation)
+                text_y -= line_h
 
     def _safe_summary(self, year, month):
         try:
@@ -508,12 +526,14 @@ class EzzaouiaReportGenerator:
 
     def _safe_month_anomalies(self, year, month):
         try:
-            start = date(year, month, 1)
-            end = date(year, month, calendar.monthrange(year, month)[1])
+            from django.utils import timezone as tz
+            last_day = calendar.monthrange(year, month)[1]
+            start_dt = tz.make_aware(datetime(year, month, 1, 0, 0, 0))
+            end_dt = tz.make_aware(datetime(year, month, last_day, 23, 59, 59, 999999))
             return list(
                 Anomalie.objects.filter(
-                    detected_at__date__gte=start,
-                    detected_at__date__lte=end,
+                    detected_at__gte=start_dt,
+                    detected_at__lte=end_dt,
                 ).order_by("-detected_at")[:50]
             )
         except Exception:
@@ -521,13 +541,15 @@ class EzzaouiaReportGenerator:
 
     def _safe_month_imported_files(self, year, month):
         try:
-            start = date(year, month, 1)
-            end = date(year, month, calendar.monthrange(year, month)[1])
+            from django.utils import timezone as tz
+            last_day = calendar.monthrange(year, month)[1]
+            start_dt = tz.make_aware(datetime(year, month, 1, 0, 0, 0))
+            end_dt = tz.make_aware(datetime(year, month, last_day, 23, 59, 59, 999999))
             return list(
                 UploadedFile.objects.filter(
                     status=UploadedFile.Status.SUCCESS,
-                    created_at__date__gte=start,
-                    created_at__date__lte=end,
+                    created_at__gte=start_dt,
+                    created_at__lte=end_dt,
                 )
                 .order_by("-created_at")[:12]
             )
@@ -691,4 +713,3 @@ class EzzaouiaReportGenerator:
         source = str(getattr(anomaly, "source", "DWH") or "DWH")
         line = f"{date_str} | {well_code} | {anomaly_type} | {severity} | {source}"
         return EzzaouiaReportGenerator._truncate(line, max_len)
-

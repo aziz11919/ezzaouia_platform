@@ -201,6 +201,39 @@ def get_well_kpis(well_key=None, year=None, month=None):
         return []
 
 
+# ─── 2b. DAILY WELL PRODUCTION ───────────────────────────────────
+def get_daily_well_production(well_key, date):
+    """
+    Production d'un puits pour une date exacte (un seul jour).
+    date : datetime.date ou str ISO (YYYY-MM-DD).
+    Retourne une liste de dicts (souvent 1 ligne) ou [].
+    """
+    try:
+        sql = """
+            SELECT
+                w.WellCode                  AS well_code,
+                d.FullDate                  AS [date],
+                f.DailyOilPerWellSTBD       AS oil_stb,
+                f.WellStatusWaterBWPD       AS water_bwpd,
+                f.DailyGasPerWellMSCF       AS gas_mscf,
+                ws.BSW                      AS bsw,
+                ws.GOR                      AS gor,
+                ws.ProdHours                AS prodhours
+            FROM dbo.FactProduction f
+            JOIN dbo.DimDate d        ON f.DateKey = d.DateKey
+            JOIN dbo.DimWell w        ON f.WellKey = w.WellKey
+            JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
+            WHERE f.WellKey = %s AND d.FullDate = %s
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [well_key, str(date)])
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"get_daily_well_production error: {e}")
+        return []
+
+
 # ─── 3. MONTHLY TREND ────────────────────────────────────────────
 _MOIS_FR = {
     1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
@@ -430,4 +463,46 @@ def get_tank_levels(tank_key=None, year=None, month=None,
 
     except Exception as e:
         logger.error(f"get_tank_levels error: {e}")
+        return []
+
+
+# ─── 7. DIMDATE COMMENTS SEARCH ──────────────────────────────────
+def search_date_comments(required_keywords=None, well_variants=None):
+    """
+    Search DimDate.comments.
+    - well_variants : at least ONE must match (OR logic) — handles EZZ1 / EZZ#1 / EZZ-1 / EZZ 1
+    - required_keywords : ALL must match (AND logic) — specific technical terms (e.g. SRP)
+    Returns list of {date, comment} dicts ordered by date.
+    """
+    if not required_keywords and not well_variants:
+        return []
+    try:
+        conditions = []
+        params = []
+
+        # Well variants: at least one must appear in comments (OR)
+        if well_variants:
+            or_parts = " OR ".join("comments LIKE %s" for _ in well_variants)
+            conditions.append(f"({or_parts})")
+            params.extend(f"%{v}%" for v in well_variants)
+
+        # Required keywords: every one must appear (AND)
+        for kw in (required_keywords or []):
+            conditions.append("comments LIKE %s")
+            params.append(f"%{kw}%")
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"""
+            SELECT FullDate, comments
+            FROM dbo.DimDate
+            WHERE {where}
+              AND comments IS NOT NULL
+              AND LEN(LTRIM(RTRIM(comments))) > 0
+            ORDER BY FullDate
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            return [{'date': str(row[0]), 'comment': str(row[1]).strip()} for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"search_date_comments error: {e}")
         return []

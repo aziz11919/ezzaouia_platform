@@ -30,14 +30,8 @@ try:
 except Exception:
     auto_arima = None
 
-try:
-    from sklearn.metrics import mean_absolute_error, mean_squared_error
-except Exception:
-    mean_absolute_error = None
-    mean_squared_error = None
 
-
-# ─── Serialization helpers ────────────────────────────────────────────────────
+# --- Serialization helpers -------------------------------------------------
 
 def safe_val(val):
     """Convert any numeric to a plain Python float; returns 0.0 on NaN/Inf/None."""
@@ -60,7 +54,64 @@ def safe_int(val):
         return 0
 
 
-# ─── Data fetching ────────────────────────────────────────────────────────────
+def safe_metric(val, digits=2):
+    """Convert metric to float, preserving None for invalid/unavailable values."""
+    try:
+        if val is None:
+            return None
+        v = float(val)
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return round(v, digits)
+    except Exception:
+        return None
+
+
+def compute_error_metrics(actual, predicted):
+    """
+    Robust metrics for forecasting:
+    - MAE / RMSE (scale-dependent, always stable)
+    - MAPE (computed only where |actual| >= 1.0 to avoid zero explosion)
+    - sMAPE / WAPE (robust alternatives for low/zero values)
+    """
+    y_true = np.asarray(actual, dtype=float)
+    y_pred = np.asarray(predicted, dtype=float)
+    if y_true.size == 0 or y_pred.size == 0:
+        return None
+
+    mae = np.mean(np.abs(y_true - y_pred))
+    rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+
+    abs_true = np.abs(y_true)
+    abs_err = np.abs(y_true - y_pred)
+
+    # Reliable MAPE only on sufficiently non-zero actual values.
+    mape_mask = abs_true >= 1.0
+    usable_points = int(np.sum(mape_mask))
+    mape_reliable = usable_points >= max(3, int(0.4 * len(y_true)))
+    mape = None
+    if usable_points > 0:
+        mape = np.mean(abs_err[mape_mask] / abs_true[mape_mask]) * 100.0
+
+    denom_smape = abs_true + np.abs(y_pred)
+    smape = np.mean((2.0 * abs_err) / np.maximum(denom_smape, 1e-6)) * 100.0
+
+    denom_wape = np.sum(abs_true)
+    wape = None if denom_wape <= 1e-6 else (np.sum(abs_err) / denom_wape) * 100.0
+
+    return {
+        'mae': safe_metric(mae),
+        'rmse': safe_metric(rmse),
+        'mape': safe_metric(mape),
+        'smape': safe_metric(smape),
+        'wape': safe_metric(wape),
+        'mape_reliable': bool(mape_reliable),
+        'mape_points': usable_points,
+        'test_points': int(len(y_true)),
+    }
+
+
+# --- Data fetching ---------------------------------------------------------
 
 def get_monthly_production(well_key=None, kpi='oil'):
     """
@@ -107,7 +158,7 @@ def get_monthly_production(well_key=None, kpi='oil'):
     return df
 
 
-# ─── Statistical analysis ─────────────────────────────────────────────────────
+# --- Statistical analysis --------------------------------------------------
 
 def test_stationarity(series):
     """ADF test for stationarity."""
@@ -217,16 +268,13 @@ def detect_seasonality(df):
         return {'detected': False, 'error': str(e), 'interpretation': 'Error during analysis'}
 
 
-# ─── Forecasting models ───────────────────────────────────────────────────────
+# --- Forecasting models ----------------------------------------------------
 
 def run_prophet(df, periods=60, changepoint_scale=0.05):
     """Run Facebook Prophet model. periods = months to forecast (default 60 = 5 years)."""
     try:
         if Prophet is None:
             logger.warning("Prophet package is not installed; skipping Prophet model")
-            return None
-        if mean_absolute_error is None or mean_squared_error is None:
-            logger.warning("scikit-learn is not installed; skipping Prophet model")
             return None
         if len(df) < 24:
             logger.warning(f"Prophet: not enough data ({len(df)} rows)")
@@ -254,11 +302,7 @@ def run_prophet(df, periods=60, changepoint_scale=0.05):
         model.fit(train)
 
         test_forecast = model.predict(test[['ds']])
-        mae = safe_val(mean_absolute_error(test['y'], test_forecast['yhat']))
-        rmse = safe_val(np.sqrt(mean_squared_error(test['y'], test_forecast['yhat'])))
-        mape = safe_val(
-            np.mean(np.abs((test['y'].values - test_forecast['yhat'].values) / (test['y'].values + 1e-10))) * 100
-        )
+        metrics = compute_error_metrics(test['y'].values, test_forecast['yhat'].values)
 
         future = model.make_future_dataframe(periods=periods, freq='MS')
         forecast = model.predict(future)
@@ -285,7 +329,7 @@ def run_prophet(df, periods=60, changepoint_scale=0.05):
 
         return {
             'model': 'Prophet',
-            'metrics': {'mae': mae, 'rmse': rmse, 'mape': mape},
+            'metrics': metrics,
             'forecast': [
                 {
                     'date': row['ds'].strftime('%Y-%m-%d'),
@@ -313,9 +357,6 @@ def run_sarima(df, periods=60):
         if auto_arima is None:
             logger.warning("pmdarima package is not installed; skipping SARIMA model")
             return None
-        if mean_absolute_error is None or mean_squared_error is None:
-            logger.warning("scikit-learn is not installed; skipping SARIMA model")
-            return None
         if len(df) < 24:
             return None
 
@@ -339,9 +380,7 @@ def run_sarima(df, periods=60):
         )
 
         test_pred = model.predict(n_periods=len(test))
-        mae = safe_val(mean_absolute_error(test, test_pred))
-        rmse = safe_val(np.sqrt(mean_squared_error(test, test_pred)))
-        mape = safe_val(np.mean(np.abs((test - test_pred) / (test + 1e-10))) * 100)
+        metrics = compute_error_metrics(test, test_pred)
 
         forecast_values, conf_int = model.predict(n_periods=periods, return_conf_int=True)
 
@@ -373,7 +412,7 @@ def run_sarima(df, periods=60):
         return {
             'model': 'SARIMA',
             'order': f"({order[0]},{order[1]},{order[2]})({seasonal_order[0]},{seasonal_order[1]},{seasonal_order[2]})[{seasonal_order[3]}]",
-            'metrics': {'mae': mae, 'rmse': rmse, 'mape': mape},
+            'metrics': metrics,
             'forecast': [
                 {
                     'date': row['date'].strftime('%Y-%m-%d'),
@@ -396,9 +435,6 @@ def run_arima(df, periods=60):
         if auto_arima is None:
             logger.warning("pmdarima package is not installed; skipping ARIMA model")
             return None
-        if mean_absolute_error is None or mean_squared_error is None:
-            logger.warning("scikit-learn is not installed; skipping ARIMA model")
-            return None
         if len(df) < 12:
             return None
 
@@ -420,9 +456,7 @@ def run_arima(df, periods=60):
         )
 
         test_pred = model.predict(n_periods=len(test))
-        mae = safe_val(mean_absolute_error(test, test_pred))
-        rmse = safe_val(np.sqrt(mean_squared_error(test, test_pred)))
-        mape = safe_val(np.mean(np.abs((test - test_pred) / (test + 1e-10))) * 100)
+        metrics = compute_error_metrics(test, test_pred)
 
         forecast_values, conf_int = model.predict(n_periods=periods, return_conf_int=True)
         last_date = df['ds'].max()
@@ -431,7 +465,7 @@ def run_arima(df, periods=60):
         return {
             'model': 'ARIMA',
             'order': str(model.order),
-            'metrics': {'mae': mae, 'rmse': rmse, 'mape': mape},
+            'metrics': metrics,
             'forecast': [
                 {
                     'date': d.strftime('%Y-%m-%d'),
@@ -453,9 +487,6 @@ def run_holt_winters(df, periods=60):
         if ExponentialSmoothing is None:
             logger.warning("statsmodels package is not installed; skipping Holt-Winters model")
             return None
-        if mean_absolute_error is None or mean_squared_error is None:
-            logger.warning("scikit-learn is not installed; skipping Holt-Winters model")
-            return None
         if len(df) < 24:
             return None
 
@@ -475,9 +506,7 @@ def run_holt_winters(df, periods=60):
         ).fit(optimized=True)
 
         test_pred = model.forecast(len(test))
-        mae = safe_val(mean_absolute_error(test, test_pred))
-        rmse = safe_val(np.sqrt(mean_squared_error(test, test_pred)))
-        mape = safe_val(np.mean(np.abs((test - test_pred) / (test + 1e-10))) * 100)
+        metrics = compute_error_metrics(test, test_pred)
 
         forecast_values = model.forecast(periods)
         last_date = df['ds'].max()
@@ -485,7 +514,7 @@ def run_holt_winters(df, periods=60):
 
         return {
             'model': 'Holt-Winters',
-            'metrics': {'mae': mae, 'rmse': rmse, 'mape': mape},
+            'metrics': metrics,
             'forecast': [
                 {'date': d.strftime('%Y-%m-%d'), 'yhat': safe_val(max(0, v))}
                 for d, v in zip(future_dates, forecast_values)
@@ -496,7 +525,7 @@ def run_holt_winters(df, periods=60):
         return None
 
 
-# ─── Main entry point ─────────────────────────────────────────────────────────
+# --- Main entry point ------------------------------------------------------
 
 def run_all_models(well_key=None, kpi='oil', periods=60):
     """Run all 4 models and return comparison. Main API entry point."""
@@ -532,9 +561,23 @@ def run_all_models(well_key=None, kpi='oil', periods=60):
         if r:
             results['models'][name] = r
 
-    valid_models = {k: v for k, v in results['models'].items() if v and 'metrics' in v}
+    valid_models = {k: v for k, v in results['models'].items() if v and v.get('metrics')}
     if valid_models:
-        best_key = min(valid_models, key=lambda k: valid_models[k]['metrics']['mape'])
+        def _sort_metric(m, key):
+            v = m.get(key)
+            return float('inf') if v is None else float(v)
+
+        # Robust model selection: prioritize WAPE/sMAPE, then RMSE/MAE.
+        best_key = min(
+            valid_models,
+            key=lambda k: (
+                _sort_metric(valid_models[k]['metrics'], 'wape'),
+                _sort_metric(valid_models[k]['metrics'], 'smape'),
+                _sort_metric(valid_models[k]['metrics'], 'rmse'),
+                _sort_metric(valid_models[k]['metrics'], 'mae'),
+                _sort_metric(valid_models[k]['metrics'], 'mape'),
+            ),
+        )
         results['best_model'] = best_key
         results['comparison'] = [
             {
@@ -542,6 +585,9 @@ def run_all_models(well_key=None, kpi='oil', periods=60):
                 'mae': v['metrics']['mae'],
                 'rmse': v['metrics']['rmse'],
                 'mape': v['metrics']['mape'],
+                'smape': v['metrics'].get('smape'),
+                'wape': v['metrics'].get('wape'),
+                'mape_reliable': v['metrics'].get('mape_reliable'),
                 'is_best': bool(k == best_key),
             }
             for k, v in valid_models.items()

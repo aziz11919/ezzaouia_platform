@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area, ComposedChart,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area, ComposedChart, Cell,
 } from 'recharts'
 import Layout from '../components/Layout/Layout'
 import { forecastingAPI } from '../api/forecasting'
@@ -17,7 +17,7 @@ const KPI_OPTIONS = [
   { value: 'prodhours', label: 'Prod Hours' },
 ]
 
-const PERIOD_OPTIONS = [12, 24, 36, 60]
+const PERIOD_OPTIONS = [12, 24, 36, 48, 60]
 
 const MODE_OPTIONS = [
   { value: 'field',     label: 'Field Total' },
@@ -239,7 +239,7 @@ function ModelComparisonTable({ comparison, bestModel }) {
     <div className="table-card">
       <div className="table-header">
         <div className="table-title">Model Comparison</div>
-        <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>Lower MAPE = better fit</div>
+        <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>Lower WAPE / sMAPE = better fit</div>
       </div>
       <table>
         <thead>
@@ -247,6 +247,8 @@ function ModelComparisonTable({ comparison, bestModel }) {
             <th>Model</th>
             <th>MAE</th>
             <th>RMSE</th>
+            <th>WAPE (%)</th>
+            <th>sMAPE (%)</th>
             <th>MAPE (%)</th>
             <th>Rank</th>
           </tr>
@@ -259,7 +261,12 @@ function ModelComparisonTable({ comparison, bestModel }) {
               </td>
               <td>{fmt(row.mae, 1)}</td>
               <td>{fmt(row.rmse, 1)}</td>
-              <td style={{ color: row.is_best ? 'var(--gold)' : 'var(--text)' }}>{fmt(row.mape, 2)}</td>
+              <td style={{ color: row.is_best ? 'var(--gold)' : 'var(--text)' }}>{fmt(row.wape, 2)}</td>
+              <td>{fmt(row.smape, 2)}</td>
+              <td style={{ color: row.is_best ? 'var(--gold)' : 'var(--text)' }}>
+                {fmt(row.mape, 2)}
+                {row.mape_reliable === false ? ' (low confidence)' : ''}
+              </td>
               <td>
                 {row.is_best && (
                   <span style={{
@@ -356,8 +363,8 @@ function QuarterlyBarChart({ data }) {
           formatter={(v) => [fmt(v, 0), 'Production']}
         />
         <Bar dataKey="value" name="Production">
-          {data.map((entry, i) => (
-            <rect key={i} fill={QUARTER_COLORS[entry.quarter] || '#4D8FCC'} />
+          {data.map((entry) => (
+            <Cell key={`${entry.label}-${entry.quarter}`} fill={QUARTER_COLORS[entry.quarter] || '#4D8FCC'} />
           ))}
         </Bar>
       </BarChart>
@@ -370,7 +377,7 @@ function WellRankingChart({ wells }) {
   const top10 = wells.slice(0, 10)
   const barData = top10.map((w) => ({
     name: w.well_code,
-    value: Math.round(w.forecast_2030 || 0),
+    value: Math.round(w.forecast_horizon ?? w.forecast_2030 ?? 0),
     trend: w.trend,
   }))
 
@@ -382,11 +389,11 @@ function WellRankingChart({ wells }) {
         <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text)', fontSize: 12, fontFamily: 'Rajdhani, sans-serif' }} width={55} />
         <Tooltip
           contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-          formatter={(v) => [fmt(v, 0), 'Forecast 2030']}
+          formatter={(v) => [fmt(v, 0), 'Horizon Forecast']}
         />
-        <Bar dataKey="value" name="2030 Forecast" radius={[0, 4, 4, 0]}>
+        <Bar dataKey="value" name="Horizon Forecast" radius={[0, 4, 4, 0]}>
           {barData.map((entry, i) => (
-            <rect key={i} fill={entry.trend === 'increasing' ? '#4DAA7A' : '#E05555'} />
+            <Cell key={`${entry.name}-${i}`} fill={entry.trend === 'increasing' ? '#4DAA7A' : '#E05555'} />
           ))}
         </Bar>
       </BarChart>
@@ -423,7 +430,7 @@ export default function Forecasting() {
 
     try {
       if (mode === 'all_wells') {
-        const res = await forecastingAPI.getAllWells(kpi)
+        const res = await forecastingAPI.getAllWells(kpi, periods)
         setAllWellsResult(res.data)
       } else if (mode === 'well') {
         if (!wellKey) { setError('Please select a well.'); setLoading(false); return }
@@ -436,7 +443,9 @@ export default function Forecasting() {
         else setResult(res.data)
       }
     } catch (err) {
-      setError('API request failed. Check that the backend is running and models are installed.')
+      const apiError = err?.response?.data?.error || err?.response?.data?.detail
+      if (apiError) setError(apiError)
+      else setError('API request failed. Check that the backend is running and models are installed.')
     } finally {
       setLoading(false)
     }
@@ -508,31 +517,29 @@ export default function Forecasting() {
         )}
 
         {/* Periods */}
-        {mode !== 'all_wells' && (
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Forecast horizon</div>
-            <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
-              {PERIOD_OPTIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriods(p)}
-                  style={{
-                    background: periods === p ? 'rgba(77,143,204,0.3)' : 'var(--surface)',
-                    color: periods === p ? 'var(--blue)' : 'var(--text-dim)',
-                    border: 'none',
-                    padding: '6px 12px',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'Rajdhani, sans-serif',
-                  }}
-                >
-                  {p}m
-                </button>
-              ))}
-            </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Forecast horizon</div>
+          <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {PERIOD_OPTIONS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriods(p)}
+                style={{
+                  background: periods === p ? 'rgba(77,143,204,0.3)' : 'var(--surface)',
+                  color: periods === p ? 'var(--blue)' : 'var(--text-dim)',
+                  border: 'none',
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'Rajdhani, sans-serif',
+                }}
+              >
+                {p}m
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Run button */}
         <button
@@ -565,7 +572,7 @@ export default function Forecasting() {
           <div style={{ fontSize: 14, color: 'var(--text)', marginBottom: 6 }}>Running forecasting models…</div>
           <div style={{ fontSize: 12 }}>
             {mode === 'all_wells'
-              ? 'Processing all active wells — this may take 2-5 minutes.'
+              ? `Processing all active wells (${periods} months) — this may take 2-5 minutes.`
               : 'Running 4 models (Prophet, SARIMA, ARIMA, Holt-Winters) — typically 30-60 seconds.'}
           </div>
         </div>
@@ -589,9 +596,11 @@ export default function Forecasting() {
       {/* ── All Wells mode ────────────────────────────────────────── */}
       {!loading && allWellsResult && mode === 'all_wells' && (
         <>
-          <div className="section-label">Well Ranking by 2030 Forecast ({allWellsResult.kpi?.toUpperCase()})</div>
+          <div className="section-label">
+            Well Ranking by Forecast Horizon ({allWellsResult.kpi?.toUpperCase()} - {allWellsResult.periods || periods}m)
+          </div>
           <div className="chart-card" style={{ marginBottom: 24 }}>
-            <div className="chart-title">Top 10 Wells — Projected 2030 Production</div>
+            <div className="chart-title">Top 10 Wells — Projected Horizon Production</div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 12 }}>
               Green = increasing trend · Red = declining trend
             </div>
@@ -600,7 +609,7 @@ export default function Forecasting() {
 
           <div className="table-card">
             <div className="table-header">
-              <div className="table-title">All Wells — Prophet Forecast Summary</div>
+              <div className="table-title">All Wells — Forecast Summary</div>
             </div>
             <table>
               <thead>
@@ -611,7 +620,7 @@ export default function Forecasting() {
                   <th>MAE</th>
                   <th>MAPE (%)</th>
                   <th>Trend</th>
-                  <th>2030 Forecast</th>
+                  <th>Horizon Forecast</th>
                 </tr>
               </thead>
               <tbody>
@@ -625,7 +634,7 @@ export default function Forecasting() {
                     <td style={{ color: w.trend === 'increasing' ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>
                       {w.trend === 'increasing' ? '↑ Rising' : '↓ Declining'}
                     </td>
-                    <td style={{ color: 'var(--gold)' }}>{fmt(w.forecast_2030, 0)}</td>
+                    <td style={{ color: 'var(--gold)' }}>{fmt(w.forecast_horizon ?? w.forecast_2030, 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -655,7 +664,7 @@ export default function Forecasting() {
                   {result.models[result.best_model]?.model}
                 </div>
                 <div style={{ color: 'var(--text-dim)', fontSize: 11 }}>
-                  MAPE: {result.models[result.best_model]?.metrics?.mape}%
+                  WAPE: {result.models[result.best_model]?.metrics?.wape ?? '-'}% · sMAPE: {result.models[result.best_model]?.metrics?.smape ?? '-'}%
                 </div>
               </StatCard>
             )}

@@ -43,7 +43,8 @@ def generate_report(request):
     if should_download:
         generator = EzzaouiaReportGenerator()
         pdf_buffer = generator.generate_monthly_report(selected_year, selected_month, role)
-        filename = f"EZZAOUIA_Report_{selected_month:02d}_{selected_year}.pdf"
+        generated_at = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"EZZAOUIA_Report_{selected_month:02d}_{selected_year}_{generated_at}.pdf"
 
         AuditLog.log(
             action=AuditLog.Action.EXPORT_PDF,
@@ -59,6 +60,9 @@ def generate_report(request):
 
         response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
         return response
 
     return serve_react(request)

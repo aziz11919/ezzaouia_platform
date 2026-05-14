@@ -629,4 +629,3 @@ def api_session_messages(request, session_id):
             for m in msgs
         ]
     })
-

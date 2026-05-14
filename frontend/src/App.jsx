@@ -65,6 +65,14 @@ function PublicOnly({ children }) {
   return children
 }
 
+function RequireAdmin({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <LoadingGate />
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />
+  return children
+}
+
 function LogoutPage() {
   const { logout } = useAuth()
   useEffect(() => {
@@ -91,7 +99,7 @@ function AppRoutes() {
       <Route path="/ingestion/list" element={<Navigate to="/bibliotheque" replace />} />
 
       <Route path="/bibliotheque" element={<RequireAuth><Library /></RequireAuth>} />
-      <Route path="/audit/log" element={<RequireAuth><AuditLog /></RequireAuth>} />
+      <Route path="/audit/log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
       <Route path="/accounts/users" element={<RequireAuth><UserManagement /></RequireAuth>} />
       <Route path="/accounts/users/create" element={<RequireAuth><CreateUser /></RequireAuth>} />
       <Route path="/accounts/users/:userId/edit" element={<RequireAuth><EditUser /></RequireAuth>} />

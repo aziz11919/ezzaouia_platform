@@ -26,7 +26,6 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'guardian',
     'django_celery_results',
-    'django_celery_beat',
     'corsheaders',
 ]
 LOCAL_APPS = [

@@ -68,30 +68,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # ── Service Celery Beat (tâches planifiées) ────────────────
-  celery-beat:
-    build: .
-    container_name: ezzaouia_celery_beat
-    restart: unless-stopped
-    command: celery-beat
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
-    env_file:
-      - .env
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - ezzaouia_network
-
   # ── Service Redis ──────────────────────────────────────────
   redis:
     image: redis:7-alpine

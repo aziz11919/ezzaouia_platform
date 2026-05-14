@@ -27,7 +27,7 @@ def audit_log_list(request):
     # Frontend is now rendered by React SPA.
     return serve_react(request)
 
-    if getattr(request.user, "role", None) not in {"admin", "user"}:
+    if getattr(request.user, "role", None) != "admin":
         messages.error(request, "Unauthorized access.")
         return redirect("dashboard:home")
 
@@ -93,8 +93,8 @@ def audit_log_list(request):
 @login_required
 @require_GET
 def api_logs(request):
-    """GET /api/audit/logs/ - JSON log list for React."""
-    if getattr(request.user, "role", None) not in {"admin", "user"}:
+    """GET /api/audit/logs/ - JSON log list for React. Admin-only."""
+    if getattr(request.user, "role", None) != "admin":
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     user_filter = request.GET.get("user", "").strip()

@@ -3,7 +3,6 @@ import shutil
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
@@ -178,11 +177,8 @@ def api_documents(request):
     }
     available_years = [d.year for d in all_docs_qs.dates("created_at", "year", order="DESC")]
 
-    paginator = Paginator(qs, 30)
-    page_obj = paginator.get_page(request.GET.get("page", 1))
-
     results = []
-    for doc in page_obj.object_list:
+    for doc in qs:
         size_bytes = _safe_file_size(doc)
         results.append({
             "id": doc.id,
@@ -201,9 +197,7 @@ def api_documents(request):
         "available_years": available_years,
         "wells": WELLS,
         "uploaders": uploaders,
-        "page": page_obj.number,
-        "pages": paginator.num_pages,
-        "total": paginator.count,
+        "total": len(results),
     })
 
 

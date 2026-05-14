@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { maintenanceAPI } from '../api/maintenance'
 
+const DEFAULT_MAINTENANCE_MESSAGE = 'The platform is currently under maintenance. Please try again in a few moments.'
+const LEGACY_FR_MAINTENANCE_MESSAGE = 'La plateforme est en cours de maintenance. Merci de reessayer dans quelques instants.'
+
+function normalizeMaintenanceMessage(message) {
+  const value = (message || '').trim()
+  return value === LEGACY_FR_MAINTENANCE_MESSAGE ? DEFAULT_MAINTENANCE_MESSAGE : value
+}
+
 export default function MaintenancePage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState({ active: true, message: '', estimated_end: null })
@@ -9,7 +17,7 @@ export default function MaintenancePage() {
   const formattedEnd = useMemo(() => {
     if (!status.estimated_end) return null
     try {
-      return new Intl.DateTimeFormat('fr-FR', {
+      return new Intl.DateTimeFormat('en-US', {
         dateStyle: 'full',
         timeStyle: 'short',
       }).format(new Date(status.estimated_end))
@@ -27,7 +35,7 @@ export default function MaintenancePage() {
         if (!mounted) return
         const next = {
           active: Boolean(res.data?.active),
-          message: res.data?.message || '',
+          message: normalizeMaintenanceMessage(res.data?.message),
           estimated_end: res.data?.estimated_end || null,
         }
         setStatus(next)
@@ -73,17 +81,17 @@ export default function MaintenancePage() {
         </div>
 
         <p style={{ color: '#CBD5E3', fontSize: 17, lineHeight: 1.7, marginBottom: 20 }}>
-          {status.message || 'La plateforme est en cours de maintenance. Merci de reessayer dans quelques instants.'}
+          {status.message || DEFAULT_MAINTENANCE_MESSAGE}
         </p>
 
         {formattedEnd ? (
           <div style={{ background: 'rgba(14,30,50,0.9)', border: '1px solid rgba(77,143,204,0.3)', borderRadius: 10, padding: '12px 14px', color: '#8FC0FF', marginBottom: 22 }}>
-            Fin estimee: {formattedEnd}
+            Estimated end: {formattedEnd}
           </div>
         ) : null}
 
         <div style={{ fontSize: 12, color: '#9BA8BB', letterSpacing: 0.4 }}>
-          Cette page se met a jour automatiquement toutes les 30 secondes.
+          This page refreshes automatically every 30 seconds.
         </div>
       </div>
     </div>

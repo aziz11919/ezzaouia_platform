@@ -17,7 +17,7 @@ class BaseModel(models.Model):
 class SiteConfiguration(models.Model):
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.TextField(
-        default="La plateforme est en cours de maintenance. Merci de reessayer dans quelques instants."
+        default="The platform is currently under maintenance. Please try again in a few moments."
     )
     maintenance_start = models.DateTimeField(null=True, blank=True)
     estimated_end = models.DateTimeField(null=True, blank=True)

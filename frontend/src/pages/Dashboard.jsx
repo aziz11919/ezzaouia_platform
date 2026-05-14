@@ -196,8 +196,8 @@ export default function Dashboard() {
         <ModuleCard
           to="/chatbot"
           tone="mod-red"
-          title="Chatbot IA"
-          description="Posez des questions sur vos donnees en langage naturel."
+          title="AI Chatbot"
+          description="Ask questions about your production data in natural language."
           icon={
             <svg width="20" height="20" fill="none" stroke="#E05555" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .26 2.798-1.17 2.798H4.17c-1.43 0-2.17-1.798-1.17-2.798L4.4 15.3" />
@@ -207,8 +207,8 @@ export default function Dashboard() {
         <ModuleCard
           to="/ingestion/upload"
           tone="mod-blue"
-          title="Import fichiers"
-          description="Importez vos rapports PDF, Word et Excel."
+          title="File Import"
+          description="Upload your PDF, Word, and Excel reports."
           icon={
             <svg width="20" height="20" fill="none" stroke="#4D8FCC" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -219,7 +219,7 @@ export default function Dashboard() {
           to="/reports"
           tone="mod-yellow"
           title="PDF Report"
-          description="Generer des rapports PDF de production mensuelle."
+          description="Generate monthly production PDF reports."
           icon={
             <svg width="20" height="20" fill="none" stroke="#FFD700" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2h-3.5a1 1 0 01-.8-.4l-1.4-1.9a1 1 0 00-.8-.4H8a2 2 0 00-2 2v15a2 2 0 002 2z" />

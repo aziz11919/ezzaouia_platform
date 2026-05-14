@@ -4,6 +4,14 @@ import Layout from '../../components/Layout/Layout'
 import { useAuth } from '../../contexts/AuthContext'
 import { maintenanceAPI } from '../../api/maintenance'
 
+const DEFAULT_MAINTENANCE_MESSAGE = 'The platform is currently under maintenance. Please try again in a few moments.'
+const LEGACY_FR_MAINTENANCE_MESSAGE = 'La plateforme est en cours de maintenance. Merci de reessayer dans quelques instants.'
+
+function normalizeMaintenanceMessage(message) {
+  const value = (message || '').trim()
+  return value === LEGACY_FR_MAINTENANCE_MESSAGE ? DEFAULT_MAINTENANCE_MESSAGE : value
+}
+
 export default function MaintenanceAdminPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -17,7 +25,7 @@ export default function MaintenanceAdminPage() {
   const formattedEnd = useMemo(() => {
     if (!estimatedEnd) return ''
     try {
-      return new Intl.DateTimeFormat('fr-FR', {
+      return new Intl.DateTimeFormat('en-US', {
         dateStyle: 'full',
         timeStyle: 'short',
       }).format(new Date(estimatedEnd))
@@ -41,11 +49,11 @@ export default function MaintenanceAdminPage() {
         const res = await maintenanceAPI.status()
         if (!mounted) return
         setActive(Boolean(res.data?.active))
-        setMessage(res.data?.message || '')
+        setMessage(normalizeMaintenanceMessage(res.data?.message))
         setEstimatedEnd(res.data?.estimated_end || '')
       } catch {
         if (!mounted) return
-        setError('Impossible de charger le statut de maintenance.')
+        setError('Unable to load the maintenance status.')
       } finally {
         if (mounted) setLoading(false)
       }
@@ -60,7 +68,7 @@ export default function MaintenanceAdminPage() {
   const onApply = async () => {
     setError('')
     if (active) {
-      const ok = window.confirm('Attention : les utilisateurs connectes seront rediriges vers la page de maintenance.')
+      const ok = window.confirm('Warning: signed-in users will be redirected to the maintenance page.')
       if (!ok) return
     }
 
@@ -72,10 +80,10 @@ export default function MaintenanceAdminPage() {
       }
       const res = await maintenanceAPI.toggle(payload)
       setActive(Boolean(res.data?.active))
-      setMessage(res.data?.message || '')
+      setMessage(normalizeMaintenanceMessage(res.data?.message))
       setEstimatedEnd(res.data?.estimated_end || '')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Echec de la mise a jour du mode maintenance.')
+      setError(err.response?.data?.detail || 'Failed to update maintenance mode.')
     }
   }
 
@@ -86,7 +94,7 @@ export default function MaintenanceAdminPage() {
   return (
     <Layout
       title="Maintenance"
-      breadcrumb="Administration - Controle de disponibilite"
+      breadcrumb="Administration - Availability control"
     >
       <div className="page-panel" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -102,43 +110,43 @@ export default function MaintenanceAdminPage() {
             letterSpacing: 1,
             textTransform: 'uppercase',
           }}>
-            {active ? 'Actif' : 'Inactif'}
+            {active ? 'Active' : 'Inactive'}
           </span>
-          <span style={{ color: '#9BA8BB', fontSize: 13 }}>Statut actuel du mode maintenance</span>
+          <span style={{ color: '#9BA8BB', fontSize: 13 }}>Current maintenance mode status</span>
         </div>
 
-        {loading ? <div style={{ color: '#9BA8BB', marginBottom: 10 }}>Chargement...</div> : null}
+        {loading ? <div style={{ color: '#9BA8BB', marginBottom: 10 }}>Loading...</div> : null}
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          <span>Activer le mode maintenance</span>
+          <span>Enable maintenance mode</span>
         </label>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', marginBottom: 8, color: '#9BA8BB', fontSize: 12 }}>Message de maintenance</label>
+          <label style={{ display: 'block', marginBottom: 8, color: '#9BA8BB', fontSize: 12 }}>Maintenance message</label>
           <textarea
             className="input-field"
             rows={4}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Message affiche aux utilisateurs"
+            placeholder="Message shown to users"
           />
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', marginBottom: 8, color: '#9BA8BB', fontSize: 12 }}>Fin estimee</label>
+          <label style={{ display: 'block', marginBottom: 8, color: '#9BA8BB', fontSize: 12 }}>Estimated end</label>
           <input
             className="input-field"
             type="datetime-local"
             value={toDateTimeLocalValue(estimatedEnd)}
             onChange={(e) => setEstimatedEnd(e.target.value)}
           />
-          {formattedEnd ? <div style={{ marginTop: 8, fontSize: 12, color: '#C9A84C' }}>Affichage: {formattedEnd}</div> : null}
+          {formattedEnd ? <div style={{ marginTop: 8, fontSize: 12, color: '#C9A84C' }}>Display: {formattedEnd}</div> : null}
         </div>
 
         {error ? <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div> : null}
 
-        <button className="btn-primary" onClick={onApply}>Appliquer</button>
+        <button className="btn-primary" onClick={onApply}>Apply</button>
       </div>
     </Layout>
   )

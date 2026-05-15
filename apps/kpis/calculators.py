@@ -37,22 +37,10 @@ def get_field_production_summary(year=None, month=None):
         params = []
 
         if year is None and month is None:
-            # Sans filtre : avg_bopd/total_oil sur le dernier jour avec huile,
-            # avg_bsw/avg_gor/avg_prodhours sur le dernier jour avec BSW > 0
-            # (ces deux jours peuvent différer quand le dernier jour de prod n'a
-            #  pas encore de données DimWellStatus renseignées).
             sql = """
                 SELECT
-                    AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
-                    (SELECT AVG(CAST(ws2.BSW AS FLOAT))
-                     FROM dbo.DimWellStatus ws2
-                     WHERE ws2.ProdHours > 0
-                       AND ws2.DateKey = (
-                         SELECT MAX(f3.DateKey)
-                         FROM dbo.FactProduction f3
-                         JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
-                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.ProdHours > 0
-                     ))                                         AS avg_bsw,
+                    AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
+                    AVG(CAST(ws.BSW AS FLOAT))                   AS avg_bsw,
                     CASE WHEN SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT)) > 0
                          THEN SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT) * 1000.0)
                               / SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT))
@@ -60,26 +48,14 @@ def get_field_production_summary(year=None, month=None):
                     END                                          AS avg_gor,
                     CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                     SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
-                    SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
+                    SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))    AS total_water,
                     MAX(d.FullDate)                              AS last_date,
-                    (SELECT AVG(CAST(ws2.ProdHours AS FLOAT))
-                     FROM dbo.DimWellStatus ws2
-                     WHERE ws2.ProdHours > 0
-                       AND ws2.DateKey = (
-                         SELECT MAX(f3.DateKey)
-                         FROM dbo.FactProduction f3
-                         JOIN dbo.DimWellStatus ws3 ON f3.WellStatusKey = ws3.WellStatusKey
-                         WHERE f3.DailyOilPerWellSTBD > 0 AND ws3.ProdHours > 0
-                     ))                                         AS avg_prodhours
+                    AVG(CAST(ws.ProdHours AS FLOAT))             AS avg_prodhours
                 FROM dbo.FactProduction f
-                JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
+                JOIN dbo.DimDate d        ON f.DateKey = d.DateKey
                 JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
                 WHERE ws.ProdHours > 0
-                  AND f.DateKey = (
-                    SELECT MAX(fp2.DateKey) FROM dbo.FactProduction fp2
-                    JOIN dbo.DimWellStatus wsx ON fp2.WellStatusKey = wsx.WellStatusKey
-                    WHERE fp2.DailyOilPerWellSTBD > 0 AND wsx.ProdHours > 0
-                )
+                  AND f.DailyOilPerWellSTBD > 0
             """
         else:
             if year:

@@ -41,14 +41,16 @@ RULES:
 """
 
 PROMPT_PRODUCTION_KPIS = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
-Your task: Answer production KPI questions using SQL data.
+Your task: Answer production KPI questions using ONLY the SQL data provided.
 
 RULES:
-- Use ONLY numbers from SQL DATABASE section
+- Use ONLY numbers from SQL DATABASE section — copy them exactly as-is
+- NEVER invent well names, BOPD values, or rankings not present in the SQL section
+- Present rankings in EXACT order as they appear in the SQL DATABASE section
+- Do NOT reorder or modify the ranking
 - Present data in markdown tables
-- Flag BSW > 80% as CRITICAL
+- Flag BSW > 80% as 🔴 CRITICAL
 - Flag GOR = 0 as DATA UNAVAILABLE
-- NEVER invent production figures
 - Respond in same language as the question
 """
 
@@ -63,6 +65,8 @@ RULES:
 - If you find ANY relevant information in the context, USE IT to answer — even partial information is valuable
 - Only say "The indexed documents do not contain specific information about this query." if the context has ZERO relevant content
 - NEVER say "no clear cause" if a cause IS mentioned in the context — extract it directly
+- When a chunk starts with a well code like "EZZ#9:", the content that follows is ABOUT that well — extract it directly
+- "as EZZ#1" means "similar to EZZ#1", not "this is about EZZ#1"
 - NEVER add information not present in the documents
 """
 
@@ -1345,6 +1349,14 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well):
     """Detect question type and return the appropriate prompt key."""
     q = question.lower()
 
+    # TCM/meeting/report questions → always document_qa
+    if any(w in q for w in [
+        'tcm', 'ocm', 'meeting', 'réunion', 'decisions', 'discussed',
+        'reported', 'minutes', 'mom', 'agenda', 'presentation',
+        'budget', 'forecast', 'hse', 'report'
+    ]):
+        return 'document_qa'
+
     # Explicit overrides take priority over all other routing
     if 'from docs' in q or 'from documents' in q or doc_id or doc_ids:
         return 'document_qa'
@@ -1474,7 +1486,14 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             'srp', 'workover', 'shut-in', 'shut in', 'fermeture', 'reprise',
             'depuis', 'depuis quand', 'how long', 'combien de temps',
         ]
-        needs_comments = any(kw in q_lower for kw in COMMENT_TRIGGER_KEYWORDS_EARLY)
+        # "from docs" explicitly disables DimDate comments
+        use_comments = not (use_sql == False)  # use_sql is False when "from docs" is set
+        needs_comments = (
+            any(kw in q_lower for kw in COMMENT_TRIGGER_KEYWORDS_EARLY)
+            and not doc_id
+            and not doc_ids
+            and use_comments
+        )
 
         DOC_PRIORITY_KEYWORDS = [
             'tubing integrity', 'intégrité tubing', 'workover history',
@@ -1511,7 +1530,12 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         # Extract well number for targeted retrieval
         detected_well_num = None
-        if well_match:
+        # Don't boost DGH for TCM/meeting/report questions
+        TCM_KEYWORDS = ['tcm', 'ocm', 'meeting', 'mom', 'minutes', 'decisions',
+                        'discussed', 'reported', 'budget', 'forecast', 'hse']
+        is_tcm_question = any(kw in q_lower for kw in TCM_KEYWORDS)
+
+        if well_match and not is_tcm_question:
             num = re.search(r'\d+', well_match.group(1))
             if num:
                 detected_well_num = num.group()
@@ -1549,7 +1573,9 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             PRIORITY_TERMS = [
                 'rejected', 'lost thickness', 'sucker rod', 'wash out',
                 'failure', 'integrity', 'abandoned', 'plug', 'hydrocarbons',
-                'circulation loss', 'cause', 'reason', 'problem', 'issue'
+                'circulation loss', 'cause', 'reason', 'problem', 'issue',
+                'workover', 'sequences of events', 'rig accepted', 'pooh',
+                'completion', 'packer', 'tubing hanger', 'july', 'april', 'october'
             ]
 
             def doc_chunk_score(d):
@@ -1566,7 +1592,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             sources = {}
             for d in sorted_results:
                 src = d.metadata.get('filename', 'Document')
-                sources.setdefault(src, []).append(d.page_content[:400])
+                sources.setdefault(src, []).append(d.page_content[:600])
 
             for src, chunks in sources.items():
                 doc_context += f"\n--- Source: {src} ---\n"

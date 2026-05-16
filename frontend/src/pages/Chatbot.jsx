@@ -60,6 +60,17 @@ function BotChart({ chartData }) {
     return () => { chartRef.current?.destroy() }
   }, [chartData])
 
+  const downloadChart = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const years = [...new Set((chartData.labels || []).map(l => l.split(' ').pop()))].filter(Boolean)
+    const yearStr = years.length ? years.join('-') : new Date().getFullYear()
+    const link = document.createElement('a')
+    link.download = `${chartData.well_code}_production_${yearStr}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
+
   if (!chartData?.labels?.length) return null
   return (
     <div className="chart-container">
@@ -70,6 +81,25 @@ function BotChart({ chartData }) {
       </div>
       <div style={{ width: '100%', height: '300px', maxHeight: '320px', marginTop: '8px' }}>
         <canvas ref={canvasRef} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+        <button
+          onClick={downloadChart}
+          style={{
+            background: '#C9A84C',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: '500',
+            letterSpacing: '0.3px',
+          }}
+        >
+          📥 Download Chart
+        </button>
       </div>
     </div>
   )
@@ -598,7 +628,7 @@ export default function Chatbot() {
       if (activeDocIds.length > 0) payload.doc_ids = activeDocIds
       if (activeDocNames.length > 0) payload.filename = activeDocNames[0]
 
-      const r = await chatbotAPI.ask(payload)
+      const r = await chatbotAPI.ask(payload, abortRef.current?.signal)
       const data = r.data
 
       const rawAnswer =

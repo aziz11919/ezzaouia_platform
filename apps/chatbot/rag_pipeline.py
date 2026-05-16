@@ -17,88 +17,181 @@ TODAY = datetime.date.today().strftime('%d/%m/%Y')
 PROMPT_WELL_ANALYSIS = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Write a complete well analysis combining SQL production data AND document history.
 
-STRUCTURE YOUR ANSWER EXACTLY LIKE THIS:
+ALWAYS structure your answer EXACTLY like this:
 
 ## 🔬 Well {well_code} — Technical Analysis
 
 ### Production Performance (from SQL)
-Extract ALL numbers from SQL DATABASE section: BOPD, cumulative oil, BSW, GOR, peak BOPD.
-Present them in a clean table. If a value is 0 or unavailable say so.
+| Parameter | Value | Unit | Assessment |
+|-----------|------:|------|-----------|
+| Avg BOPD | **[value]** | STB/j | ✅/⚠️/🔴 |
+| Peak BOPD | **[value]** | STB/j | — |
+| Cumulative Oil | **[value]** | STB | — |
+| Total Gas | **[value]** | MSCF | — |
+| Avg BSW | **[value]** | % | ✅/⚠️/🔴 |
+| Avg GOR | **[value]** | SCF/STB | ✅/DATA UNAVAILABLE |
+| Avg Prod Hours | **[value]** | h/j | — |
 
 ### Operational History (from Documents)
-Extract key events from DOCUMENT CONTEXT: workovers, interventions, completions, failures, dates.
-List them chronologically. Quote the source document.
+| Date | Event | Source |
+|------|-------|--------|
+| [date] | [event description] | [filename] |
 
 ### Assessment
 2-3 sentences summarizing well health based on the data above.
 
 RULES:
+- ALWAYS use markdown tables — NEVER plain text paragraphs for data
 - Use ONLY numbers from SQL DATABASE section
 - Use ONLY events from DOCUMENT CONTEXT section
-- NEVER invent data
+- BOLD all numeric values: **181.3 STB/j**
+- Flag BSW > 80% as 🔴 CRITICAL
+- Flag BSW 50-80% as ⚠️ Elevated
+- Flag BSW < 50% as ✅ Normal
 - If SQL is empty say "No production data available"
 - If documents are empty say "No document history available"
+- NEVER invent data
 """
 
 PROMPT_PRODUCTION_KPIS = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Answer production KPI questions using ONLY the SQL data provided.
 
+ALWAYS structure your answer with markdown tables:
+
+## 📊 [Descriptive Title]
+
+| # | Well | Avg BOPD | Cumulative (STB) | BSW% | Status |
+|:-:|------|----------:|-----------------:|-----:|--------|
+| 1 | EZZ11 | **463.3** | 3,814,559 | 1.6% | ✅ Excellent |
+
+OR for field KPIs:
+
+| Indicator | Value | Unit | Status |
+|-----------|------:|------|--------|
+| Avg BOPD | **[value]** | STB/j | ✅/⚠️/🔴 |
+
+**Critical Alerts:** [BSW > 80% wells flagged here]
+
+*Source: EZZAOUIA DWH — [date]*
+
 RULES:
-- Use ONLY numbers from SQL DATABASE section — copy them exactly as-is
-- NEVER invent well names, BOPD values, or rankings not present in the SQL section
-- Present rankings in EXACT order as they appear in the SQL DATABASE section
-- Do NOT reorder or modify the ranking
-- Present data in markdown tables
+- ⚠️ CRITICAL: Copy the ranking EXACTLY as numbered in SQL DATABASE section — number 1 is first, number 2 is second, etc. NEVER reorder.
+- The ranking is already correct in the SQL section — do NOT sort by any other column
+- If SQL shows EZZ4 at position 2, EZZ4 MUST be row 2 in your table
+- ALWAYS use markdown tables — NEVER plain text only
+- BOLD all numeric values: **99,126 STB**
+- Use ONLY numbers from SQL DATABASE section — copy them exactly
+- Present rankings in EXACT order as they appear in SQL section
 - Flag BSW > 80% as 🔴 CRITICAL
 - Flag GOR = 0 as DATA UNAVAILABLE
+- NEVER invent well names or production figures
 - Respond in same language as the question
 """
 
 PROMPT_DOCUMENT_QA = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Answer questions by extracting information from the provided documents.
 
+Structure your answer clearly:
+
+## 📋 [Topic Title]
+
+For factual questions: use a short summary paragraph + table if multiple items.
+For event/history questions: use a chronological list or table with dates.
+
+| Date | Event | Details |
+|------|-------|---------|
+| [date] | [event] | [details] |
+
+OR for single-fact answers: 2-4 clear sentences with **bold key facts**.c
+
+*Source: [document name]*
 RULES:
-- Answer ONLY from DOCUMENT CONTEXT section — ignore SQL DATABASE section entirely
+- The question asks about EZZ1 — answer ONLY about EZZ1, NEVER about EZZ11
+- EZZ1 and EZZ11 are completely different wells — never confuse them
+- Answer ONLY from DOCUMENT CONTEXT section
+- For workover history: create ONE row per workover year, summarizing the purpose
+- Example table:
+  | Year | Period | Purpose | Result |
+  |------|--------|---------|--------|
+  | 2013 | July 14-25 | Investigate stuck pump, scale deposits | Completion replaced |
+  | 2015 | April 21-26 | Tubing integrity failure — 58 joints rejected | New completion RIH |
+  | 2017 | Oct 20-29 | Convert to sucker rod pump system | New completion with chemical injection |
+- NEVER list individual drilling steps — only summarize the campaign objective and result
 - Extract facts directly: dates, causes, actions, results
-- Write 3-6 sentences maximum
+- BOLD key facts: **58 tubing joints rejected**, **April 24th, 2015**
 - Always cite which document the answer comes from
-- If you find ANY relevant information in the context, USE IT to answer — even partial information is valuable
-- Only say "The indexed documents do not contain specific information about this query." if the context has ZERO relevant content
-- NEVER say "no clear cause" if a cause IS mentioned in the context — extract it directly
-- When a chunk starts with a well code like "EZZ#9:", the content that follows is ABOUT that well — extract it directly
-- "as EZZ#1" means "similar to EZZ#1", not "this is about EZZ#1"
+- If you find ANY relevant information, USE IT
+- Only say "The indexed documents do not contain specific information about this query." if context has ZERO relevant content
+- When a chunk starts with "EZZ#9:", extract it directly for EZZ9 questions
 - NEVER add information not present in the documents
+- Maximum 6 sentences for narrative answers
 """
 
 PROMPT_OPERATIONAL_HISTORY = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
-Your task: Answer questions about field operations, workovers, interventions using operator logs.
+Your task: Answer questions about field operations using operator logs from DimDate.
+
+ALWAYS structure your answer like this:
+
+## 📋 Field Notes — [Well/Topic]
+
+**[N] records found — [N] distinct period(s) identified**
+
+### Periods Identified
+| # | Start | End | Duration |
+|:-:|-------|-----|----------|
+| 1 | DD/MM/YYYY | DD/MM/YYYY | X days |
+
+### Key Excerpts
+| Date | Activity |
+|------|---------|
+| DD/MM/YYYY | [description of activity] |
+
+*Source: EZZAOUIA DWH — DimDate.comments*
 
 RULES:
 - Use ONLY data from OPERATOR COMMENTS section
 - Present events chronologically with dates
-- If no comments found say:
-  "No operator log entries found for this activity in the database."
+- BOLD key technical terms: **workover**, **SRP intervention**, **shut-in**
+- If no comments found say: "No operator log entries found for this activity in the database."
 - NEVER invent dates or events
 """
 
 PROMPT_FIELD_SUMMARY = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Provide a field-level summary using SQL KPI data.
 
-STRUCTURE:
+ALWAYS structure your answer EXACTLY like this:
+
 ## 📊 EZZAOUIA Field — Summary
 
+> **Executive Summary:** [2-3 sentences with most critical numbers]
+
 ### Key Performance Indicators
-Present all available KPIs in a table: BOPD, BSW, GOR, cumulative oil, active wells.
+| Indicator | Value | Unit | Benchmark | Status |
+|-----------|------:|------|-----------|--------|
+| Avg BOPD | **[value]** | STB/j | >200 target | ✅/⚠️/🔴 |
+| Total Cumulative Oil | **[value]** | STB | — | — |
+| Field BSW | **[value]** | % | <50% OK | ✅/⚠️/🔴 |
+| Field GOR | **[value]** | SCF/STB | >500 alert | ✅/DATA UNAVAILABLE |
+| Avg Prod Hours | **[value]** | h/j | >20 optimal | ✅/⚠️/🔴 |
 
 ### Critical Alerts
-List any wells with BSW > 80% or other critical issues.
+| Well | BSW% | BOPD | Risk |
+|------|-----:|-----:|------|
+| [well] | **[bsw]%** | [bopd] | 🔴 CRITICAL |
 
-### Recommendations
-2-3 field-level engineering recommendations.
+### Monthly Breakdown (if available)
+| Month | Oil (STB) | BSW% |
+|-------|----------:|-----:|
+
+*Source: EZZAOUIA DWH — [date]*
 
 RULES:
+- ALWAYS use markdown tables — NEVER plain text paragraphs for data
+- BOLD all numeric values
 - Use ONLY numbers from SQL DATABASE section
 - NEVER invent field statistics
+- Replace [date] with the DATE value from the context header
+- GOR > 0 means data IS available — only flag as DATA UNAVAILABLE if GOR = 0
 """
 
 KEYWORDS = [
@@ -194,7 +287,7 @@ def index_document(text, metadata=None, doc_id=None):
     chunk_size=1200,
     chunk_overlap=500,
     separators=["\n\n", "\n", ".", " "],
-)
+    )
         chunks = splitter.split_text(text)
         docs = []
         for i, chunk in enumerate(chunks):
@@ -305,7 +398,7 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                 logger.warning(f"DGH extra fetch error: {e}")
 
             # For small single-page files, include ALL chunks (not just top matches)
-            if len(dgh_results) < 10:
+            if len(dgh_results) < 30:
                 try:
                     all_dgh = col.get(
                         where={"filename": DGH_FILENAME},
@@ -566,10 +659,11 @@ def get_sql_context(question):
     q = question.lower()
     lang = detect_language(question)
 
+    years_found_early = re.findall(r'\b(20\d{2})\b', q)
     if any(w in q for w in ['production', 'total', 'champ', 'bopd', 'huile',
                              'résumé', 'resume', 'situation', 'global',
                              'bilan', 'analyse', 'performance', 'kpi',
-                             'field', 'summary', 'overview']):
+                             'field', 'summary', 'overview']) and not years_found_early:
         s = get_field_production_summary()
         avg_bopd = s.get('avg_bopd', 0) or 0
         avg_bsw = s.get('avg_bsw', 0) or 0
@@ -601,7 +695,7 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
         top = get_top_producers(limit=20)
         context += f"\n=== WELL RANKING — ALL {len(top)} ACTIVE WELLS ===\n"
         for i, w in enumerate(top, 1):
-            bsw_flag = " ⚠️ CRITICAL HIGH BSW" if float(w.get('avg_bsw', 0) or 0) > 80 else ""
+            bsw_flag = " 🔴 CRITICAL" if float(w.get('avg_bsw', 0) or 0) > 80 else ""
             context += (
                 f"{i:2}. {w['well_code']:8} | "
                 f"BOPD: {float(w.get('avg_bopd', 0) or 0):>8,.1f} STB/j | "
@@ -957,7 +1051,9 @@ def _is_well_year_trend_request(question):
     has_year = bool(_extract_year(question))
     trend_words = [
         'trend', 'monthly', 'history', 'evolution',
-        'tendance', 'historique', 'evolution',
+        'tendance', 'historique', '\u00e9volution',
+        'montrez', 'montrer', 'afficher', 'affiche',
+        'mensuel', 'mensuelle', 'courbe', 'graphique',
         '\u0627\u062a\u062c\u0627\u0647', '\u062a\u0637\u0648\u0631', '\u0634\u0647\u0631\u064a',
     ]
     metric_words = ['bopd', 'production', 'huile', 'oil', '\u0627\u0646\u062a\u0627\u062c']
@@ -1040,7 +1136,10 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
         return None
 
     total_oil = sum(float(r.get('total_oil', 0) or 0) for r in rows)
-    total_days = sum(calendar.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
+    import calendar as _cal
+    total_days = sum(_cal.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
+    # Count only months that have production data
+    months_with_data = len([r for r in rows if float(r.get('total_oil', 0) or 0) > 0])
     avg_bopd = (total_oil / total_days) if total_days > 0 else 0.0
 
     first_oil = float(rows[0].get('total_oil', 0) or 0)
@@ -1345,9 +1444,17 @@ def generate_suggestions(question, well=None, lang='fr'):
     ]
 
 
-def _detect_task(question, doc_id, doc_ids, needs_comments, well):
+def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, use_docs=True):
     """Detect question type and return the appropriate prompt key."""
+    # If SQL is disabled (from docs was used), force document_qa
+    if not use_sql or doc_id or doc_ids:
+        return 'document_qa'
+
     q = question.lower()
+
+    # from db always → production_kpis
+    if 'from db' in q or 'from database' in q:
+        return 'production_kpis'
 
     # TCM/meeting/report questions → always document_qa
     if any(w in q for w in [
@@ -1357,15 +1464,7 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well):
     ]):
         return 'document_qa'
 
-    # Explicit overrides take priority over all other routing
-    if 'from docs' in q or 'from documents' in q or doc_id or doc_ids:
-        return 'document_qa'
-
-    if 'from db' in q or 'from database' in q:
-        return 'production_kpis'
-
     has_well = well is not None
-    has_file = False  # already handled above
 
     # Operational history — DimDate comments
     if needs_comments:
@@ -1379,10 +1478,6 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well):
     ]):
         return 'well_analysis'
 
-    # Document Q&A — explicit keyword
-    if 'from docs' in q or 'from documents' in q:
-        return 'document_qa'
-
     # Field summary
     if any(w in q for w in [
         'field', 'champ', 'global', 'summary', 'résumé',
@@ -1394,7 +1489,10 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well):
     if has_well and any(w in q for w in [
         'caused', 'why', 'what happened', 'failure', 'failed',
         'history', 'when did', 'how did', 'what was', 'describe',
-        'explain', 'detail', 'event', 'issue', 'problem'
+        'explain', 'detail', 'event', 'issue', 'problem',
+        'workover', 'intervention', 'completion', 'performed',
+        'abandoned', 'plugged', 'drilled', 'spud', 'design',
+        'what caused', 'what is the', 'tell me'
     ]):
         return 'document_qa'
 
@@ -1477,7 +1575,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         if year_match:
             search_query += f" {year_match.group(1)} production operations"
         if well_match:
-            search_query += f" {well_match.group(1)} workover intervention completion tubing failure rejected joints sucker rod wear"
+            search_query += f" {well_match.group(1)} workover intervention completion tubing failure rejected joints sucker rod wear 2013 2015 2017 sequences of events rig acceptance POOH"
 
         COMMENT_TRIGGER_KEYWORDS_EARLY = [
             'comment', 'remarque', 'note', 'period', 'période', 'during',
@@ -1526,6 +1624,10 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         else:
             retrieval_k = 6
 
+        # When "from docs" is explicit and no file attached, retrieve more chunks
+        if 'from docs' in q_lower and not doc_id and not doc_ids:
+            retrieval_k = 20
+
         logger.info(f"Retrieval k={retrieval_k} ({'doc-priority' if is_doc_priority else 'doc/comments' if is_doc_only_question else 'production'})")
 
         # Extract well number for targeted retrieval
@@ -1546,9 +1648,63 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         )
         logger.info(f"DOC RESULTS: {len(doc_results)} chunks")
 
+        # For workover history questions from docs, force all DGH chunks for the well
+        if 'workover' in q_lower and 'from docs' in q_lower and detected_well_num:
+            vs = get_global_vectorstore()
+            col = vs._collection
+            from langchain.schema import Document as LCDoc
+            DGH_FILE = f"DGH_EZZ{detected_well_num}.pdf"
+            all_dgh = col.get(where={'filename': DGH_FILE}, include=['documents', 'metadatas'])
+            if all_dgh and all_dgh.get('documents'):
+                forced = [
+                    LCDoc(page_content=doc, metadata=meta)
+                    for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas'])
+                ]
+                existing = {r.page_content[:80] for r in doc_results}
+                new_chunks = [d for d in forced if d.page_content[:80] not in existing]
+                doc_results = forced + [r for r in doc_results if r.page_content[:80] not in {d.page_content[:80] for d in forced}]
+                logger.info(f"Workover forced: all {len(forced)} chunks from {DGH_FILE}")
+
+        # If user mentions a specific TCM/OCM number, force those documents
+        tcm_match = re.search(r'\b(?:from\s+)?(tcm|ocm)\s*#?\s*(\d+)\b', q_lower)
+        if tcm_match:
+            tcm_num = tcm_match.group(2)
+            vs = get_global_vectorstore()
+            col = vs._collection
+            from langchain.schema import Document as LCDoc
+            available = get_available_documents()
+            tcm_files = [f for f in available if tcm_num in f.replace(' ', '').replace('_', '').replace('#', '').lower()]
+            logger.info(f"TCM {tcm_num} matched files: {tcm_files}")
+            tcm_chunks = []
+            for fname in tcm_files:
+                r = col.get(where={'filename': fname}, include=['documents', 'metadatas'])
+                for doc, meta in zip(r['documents'], r['metadatas']):
+                    from langchain.schema import Document as LCDoc
+                    tcm_chunks.append(LCDoc(page_content=doc, metadata=meta))
+            if tcm_chunks:
+                doc_results = tcm_chunks + doc_results
+                logger.info(f"TCM {tcm_num} forced: {len(tcm_chunks)} chunks from {tcm_files}")
+
+        if year_match and not detected_well_num and not is_tcm_question:
+            target_yr = year_match.group(1)
+            vs = get_global_vectorstore()
+            col = vs._collection
+            from langchain.schema import Document as LCDoc
+            year_boosted = []
+            existing_keys = {r.page_content[:80] for r in doc_results}
+            all_meta = col.get(include=['metadatas', 'documents'])
+            for doc, meta in zip(all_meta['documents'], all_meta['metadatas']):
+                if target_yr in doc:
+                    if doc[:80] not in existing_keys:
+                        year_boosted.append(LCDoc(page_content=doc, metadata=meta))
+                        existing_keys.add(doc[:80])
+            if year_boosted:
+                doc_results = year_boosted[:8] + doc_results
+                logger.info(f"Year {target_yr} boosted: {len(year_boosted)} chunks added")
+
         # Detect task type early so later logic (SQL exclusion, prompt) can use it
         well_ref = normalize_well_code(question)
-        task = _detect_task(question, doc_id, doc_ids, needs_comments, well_ref)
+        task = _detect_task(question, doc_id, doc_ids, needs_comments, well_ref, use_sql=use_sql, use_docs=use_docs)
         logger.info(f"Task detected: {task}")
 
         for i, r in enumerate(doc_results[:5]):
@@ -1575,14 +1731,15 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 'failure', 'integrity', 'abandoned', 'plug', 'hydrocarbons',
                 'circulation loss', 'cause', 'reason', 'problem', 'issue',
                 'workover', 'sequences of events', 'rig accepted', 'pooh',
-                'completion', 'packer', 'tubing hanger', 'july', 'april', 'october'
+                'completion', 'packer', 'tubing hanger', 'july', 'april', 'october',
+                '2013', '2015', '2017'
             ]
 
             def doc_chunk_score(d):
                 score = 0
                 content = d.page_content.lower()
                 if target_year and target_year in d.page_content:
-                    score += 10
+                    score += 20
                 if any(t in content for t in PRIORITY_TERMS):
                     score += 5
                 return score
@@ -1710,6 +1867,16 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     comments_rows = filtered
                     logger.info(f"Post-filtered: {len(comments_rows)} rows")
 
+            # For workover questions, filter to only entries mentioning rig/WO operations
+            if 'workover' in q_lower and comments_rows:
+                WO_TERMS = ['rig', 'work over', 'workover', 'w.o', 'wo ',
+                            'pooh', 'rih', 'completion', 'packer', 'ulysse', 'ctf']
+                comments_rows = [
+                    r for r in comments_rows
+                    if any(term in r['comments'].lower() for term in WO_TERMS)
+                ]
+                logger.info(f"Workover filter applied: {len(comments_rows)} rows remaining")
+
             logger.info(
                 f"DimDate comments found: {len(comments_rows)} rows "
                 f"for well={well_code_str}, words={search_words}"
@@ -1812,7 +1979,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         # ✅ FIX 3: Truncate doc_context to avoid exceeding num_ctx.
         # Keep the most relevant chunks (first 4000 chars) so the LLM
         # always sees real context rather than a truncated/empty prompt.
-        MAX_DOC_CONTEXT_CHARS = 10000
+        MAX_DOC_CONTEXT_CHARS = 15000
         if len(doc_context) > MAX_DOC_CONTEXT_CHARS:
             doc_context = doc_context[:MAX_DOC_CONTEXT_CHARS] + "\n[... context truncated for length ...]"
             logger.info(f"Doc context truncated to {MAX_DOC_CONTEXT_CHARS} chars")

@@ -40,7 +40,7 @@ def get_field_production_summary(year=None, month=None):
             sql = """
                 SELECT
                     AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
-                    AVG(CAST(ws.BSW AS FLOAT))                   AS avg_bsw,
+                    AVG(CASE WHEN ws.BSW > 0 THEN CAST(ws.BSW AS FLOAT) END) AS avg_bsw,
                     CASE WHEN SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT)) > 0
                          THEN SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT) * 1000.0)
                               / SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT))
@@ -70,7 +70,7 @@ def get_field_production_summary(year=None, month=None):
             sql = f"""
                 SELECT
                     AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))  AS avg_bopd,
-                    AVG(CAST(ws.BSW AS FLOAT))                 AS avg_bsw,
+                    AVG(CASE WHEN ws.BSW > 0 THEN CAST(ws.BSW AS FLOAT) END) AS avg_bsw,
                     CASE WHEN SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT)) > 0
                          THEN SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT) * 1000.0)
                               / SUM(CAST(f.DailyOilPerWellSTBD AS FLOAT))
@@ -144,7 +144,7 @@ def get_well_kpis(well_key=None, year=None, month=None):
                 w.WellCode                                  AS well_code,
                 w.Libelle                                   AS well_name,
                 AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
-                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
+                AVG(CASE WHEN ws.BSW > 0 THEN CAST(ws.BSW AS FLOAT) END) AS avg_bsw,
                 AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor,
                 CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                 SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
@@ -261,7 +261,7 @@ def get_monthly_trend(year=None, well_key=None, year_start=None, year_end=None,
                 CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                 SUM(CAST(f.WellStatusWaterBWPD AS FLOAT))   AS total_water,
                 SUM(CAST(f.DailyGasPerWellMSCF AS FLOAT))   AS total_gas,
-                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw,
+                AVG(CASE WHEN ws.BSW > 0 THEN CAST(ws.BSW AS FLOAT) END) AS avg_bsw,
                 AVG(CAST(NULLIF(ws.GOR, 0) AS FLOAT))       AS avg_gor
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
@@ -363,14 +363,14 @@ def get_top_producers(limit=5, year=None, month=None):
                 w.Libelle                                   AS well_name,
                 CAST(SUM(f.DailyOilPerWellSTBD) AS BIGINT)  AS total_oil,
                 AVG(CAST(f.DailyOilPerWellSTBD AS FLOAT))   AS avg_bopd,
-                AVG(CAST(ws.BSW AS FLOAT))                  AS avg_bsw
+                AVG(CASE WHEN ws.BSW > 0 THEN CAST(ws.BSW AS FLOAT) END) AS avg_bsw
             FROM dbo.FactProduction f
             JOIN dbo.DimDate d       ON f.DateKey = d.DateKey
             JOIN dbo.DimWell w       ON f.WellKey = w.WellKey
             JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
             WHERE ws.ProdHours > 0 AND {where_sql}
             GROUP BY w.WellCode, w.Libelle
-            ORDER BY total_oil DESC
+            ORDER BY avg_bopd DESC
         """
         params_full = [limit] + params
 

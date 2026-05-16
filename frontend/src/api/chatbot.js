@@ -3,7 +3,7 @@ import api from './axios'
 export const chatbotAPI = {
   getSessions:      ()              => api.get('/chatbot/sessions/'),
   getMessages:      (sessionId)     => api.get(`/chatbot/session/${sessionId}/messages/`),
-  ask:              (payload)       => api.post('/chatbot/ask/', payload),
+  ask:              (payload, signal) => api.post('/chatbot/ask/', payload, { signal }),
   upload:           (formData)      => api.post('/chatbot/upload/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

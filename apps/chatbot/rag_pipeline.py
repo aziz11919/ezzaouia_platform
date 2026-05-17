@@ -88,6 +88,8 @@ RULES:
 - Respond in same language as the question
 """
 
+# FIX 4: PROMPT_DOCUMENT_QA no longer hardcodes EZZ1 vs EZZ11.
+# The well confusion rule is injected dynamically in ask() via {well_confusion_rule}.
 PROMPT_DOCUMENT_QA = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Answer questions by extracting information from the provided documents.
 
@@ -102,20 +104,29 @@ For event/history questions: use a chronological list or table with dates.
 |------|-------|---------|
 | [date] | [event] | [details] |
 
-OR for single-fact answers: 2-4 clear sentences with **bold key facts**.c
+OR for single-fact answers: 2-4 clear sentences with **bold key facts**.
 
 *Source: [document name]*
+
 RULES:
-- The question asks about EZZ1 — answer ONLY about EZZ1, NEVER about EZZ11
-- EZZ1 and EZZ11 are completely different wells — never confuse them
+{well_confusion_rule}
 - Answer ONLY from DOCUMENT CONTEXT section
+- For tubing integrity or workover history on a SINGLE well:
+  * Read the ENTIRE context from start to finish before writing
+  * Create ONE row per workover event found in context
+  * Order rows chronologically — oldest first
+  * Add a final row for current production status if mentioned in context
+  * Use this generic table structure:
+    | Year | Period | Tubing Event | Result |
+    |------|--------|-------------|--------|
+    | [year] | [dates] | [event description from context] | [outcome from context] |
+    | Current | [date] | [current condition from context] | [status] |
+  * NEVER stop after finding 1 event — scan ALL context for ALL years
+  * NEVER invent rows not present in context
+  * NEVER skip rows that exist in context
+  * If context has 3 workovers → generate 3 rows + Current
+  * BOLD critical findings: **rejected joints**, **tubing leak**, **integrity failure**
 - For workover history: create ONE row per workover year, summarizing the purpose
-- Example table:
-  | Year | Period | Purpose | Result |
-  |------|--------|---------|--------|
-  | 2013 | July 14-25 | Investigate stuck pump, scale deposits | Completion replaced |
-  | 2015 | April 21-26 | Tubing integrity failure — 58 joints rejected | New completion RIH |
-  | 2017 | Oct 20-29 | Convert to sucker rod pump system | New completion with chemical injection |
 - NEVER list individual drilling steps — only summarize the campaign objective and result
 - Extract facts directly: dates, causes, actions, results
 - BOLD key facts: **58 tubing joints rejected**, **April 24th, 2015**
@@ -124,7 +135,32 @@ RULES:
 - Only say "The indexed documents do not contain specific information about this query." if context has ZERO relevant content
 - When a chunk starts with "EZZ#9:", extract it directly for EZZ9 questions
 - NEVER add information not present in the documents
-- Maximum 6 sentences for narrative answers
+- Maximum 6 sentences for narrative answers (NOT for tables — tables have no sentence limit)
+
+- For field-wide questions (all wells / tous les puits / every well):
+  * CRITICAL: Each chunk is labeled [EZZ-XX DATA] — this label shows
+    which well the information belongs to. NEVER use [EZZ-01 DATA]
+    chunks to describe EZZ-05, EZZ-07, EZZ-15, or any other well.
+  * If a well's labeled chunks contain no tubing integrity data,
+    write "No data in documents" — do NOT borrow data from another well.
+  * Create EXACTLY ONE row per well in the summary table
+  * Include ALL wells from EZZ-01 to EZZ-18 (EZZ-13 does not exist — skip it)
+  * NEVER stop the table at EZZ-10 — always continue until EZZ-18
+  * Extract ALL information EXCLUSIVELY from the DOCUMENT CONTEXT section
+  * NEVER copy from memory or invent data — use ONLY what is in the context
+  * If a well has NO information in the context: write "No data in documents"
+  * For tubing integrity questions use this table structure:
+    | Well | Well Status | Key Tubing Events | Current Condition |
+    |------|-------------|-------------------|-------------------|
+    | [well_code] | [ACTIVE/CLOSED/SHUT-IN/DISPOSAL/P&A from context] | [events extracted from context only] | [condition from context only] |
+  * For workover history questions use this table structure:
+    | Well | Last WO Year | WO Purpose | Result |
+    |------|-------------|------------|--------|
+    | [well_code] | [year from context] | [purpose from context] | [result from context] |
+  * For production questions use this table structure:
+    | Well | Status | Key Production Events | Current Status |
+    |------|--------|-----------------------|----------------|
+    | [well_code] | [status from context] | [events from context] | [status from context] |
 """
 
 PROMPT_OPERATIONAL_HISTORY = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
@@ -225,11 +261,8 @@ def get_llm():
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
-            # ✅ FIX 1: Increased from 3000 to 8192.
-            # With 3000 the prompt was silently truncated — Ollama never
-            # saw the retrieved document chunks, causing hallucinations.
-            num_ctx=8192,
-            num_predict=1200,
+            num_ctx=16384,    
+            num_predict=-2,
             top_p=0.85,
             repeat_penalty=1.15,
             timeout=180,
@@ -273,6 +306,27 @@ def get_global_vectorstore():
     return _global_vectorstore
 
 
+def _extract_well_num_from_chunk(chunk):
+    """
+    FIX 2: Robust well number extraction that avoids EZZ1 matching EZZ11.
+    Matches the LONGEST number at a word boundary to prevent prefix collisions.
+    E.g. 'EZZAOUIA#11' returns '11', not '1'.
+    """
+    import re as _re
+    # Find all candidate matches with their positions
+    matches = list(_re.finditer(
+        r'(?:EZZ|EZZAOUIA)\s*#?\s*0*(\d{1,2})(?!\d)',
+        chunk, _re.IGNORECASE
+    ))
+    if not matches:
+        return None
+    # Among all matches, return the number that appears most frequently
+    from collections import Counter
+    nums = [m.group(1).lstrip('0') or '0' for m in matches]
+    most_common = Counter(nums).most_common(1)[0][0]
+    return most_common
+
+
 def index_document(text, metadata=None, doc_id=None):
     if not text or not text.strip():
         return 0
@@ -280,14 +334,36 @@ def index_document(text, metadata=None, doc_id=None):
     if doc_id:
         metadata['doc_id'] = str(doc_id)
 
-    import re as _re
-
     try:
+        # Use smaller chunks for small files (DGH per-well files)
+        # and larger chunks for big files (field-wide documents)
+        estimated_pages = max(1, len(text) // 2000)
+        if estimated_pages <= 3:
+            # Very small files (EZZ-03, 05, 06, 07) — keep all content together
+            chunk_size = 2000
+            chunk_overlap = 200
+        elif estimated_pages <= 10:
+            # Small files (EZZ-01, 04, 10, 11) — medium chunks
+            chunk_size = 1200
+            chunk_overlap = 300
+        else:
+            # Large files (EZZ-02, 09, 17, 18) — smaller chunks for precision
+            chunk_size = 800
+            chunk_overlap = 200
+
         splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1200,
-    chunk_overlap=500,
-    separators=["\n\n", "\n", ".", " "],
-    )
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=[
+                "\nWORKOVER",
+                "\n2.",
+                "\n\n\n",
+                "\n\n",
+                "\n",
+                ".",
+                " ",
+            ],
+        )
         chunks = splitter.split_text(text)
         docs = []
         for i, chunk in enumerate(chunks):
@@ -296,13 +372,21 @@ def index_document(text, metadata=None, doc_id=None):
                 'chunk_index': i,
                 'chunk_total': len(chunks)
             }
-            well_match = _re.search(
-                r'(?:EZZ|EZZAOUIA)\s*#?\s*(\d{1,2})\b(?!\d)', chunk, _re.IGNORECASE)
-            if not well_match:
-                well_match = _re.search(
-                    r'(?:EZZ|EZZAOUIA)\s*[-#]?\s*0*(\d{1,2})\b', chunk, _re.IGNORECASE)
-            if well_match:
-                chunk_meta['well_num'] = well_match.group(1)
+            # PRIMARY: Extract well number from filename (most reliable)
+            # Filename format: DGH_EZZ1.pdf, DGH_EZZ17.pdf, etc.
+            import re as _re
+            _filename = metadata.get('filename', '')
+            filename_well = _re.search(
+                r'DGH_EZZ(\d{1,2})\.pdf', _filename, _re.IGNORECASE)
+
+            if filename_well:
+                # Tag ALL chunks from this file with the well number
+                chunk_meta['well_num'] = filename_well.group(1).lstrip('0') or '0'
+            else:
+                # FALLBACK: Try to extract from chunk text
+                well_num = _extract_well_num_from_chunk(chunk)
+                if well_num:
+                    chunk_meta['well_num'] = well_num
             docs.append(Document(
                 page_content=chunk,
                 metadata=chunk_meta
@@ -317,14 +401,22 @@ def index_document(text, metadata=None, doc_id=None):
         return 0
 
 
+def _well_num_matches(chunk_well, target_well):
+    """
+    FIX 2: Strict equality check that prevents '1' matching '11' or vice versa.
+    Both values are stripped of leading zeros before comparison.
+    """
+    if not chunk_well or not target_well:
+        return False
+    return chunk_well.lstrip('0') == target_well.lstrip('0')
+
+
 def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
     try:
         results = []
 
         if doc_id:
             vs = get_vectorstore_for_doc(doc_id)
-            # When a specific file is attached, return ALL its chunks
-            # so no relevant chunk is missed due to semantic ranking
             try:
                 col = vs._collection
                 all_chunks = col.get(include=['documents', 'metadatas'])
@@ -338,7 +430,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                     return all_docs
             except Exception as e:
                 logger.warning(f"Full file retrieval error: {e}")
-            # Fallback to MMR
             results = vs.max_marginal_relevance_search(
                 query, k=k, fetch_k=k*3, lambda_mult=0.6)
             if results:
@@ -355,20 +446,19 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
         main_results = vs.max_marginal_relevance_search(
             query, k=k, fetch_k=k*4, lambda_mult=0.5)
 
-        # Boost well-specific chunks to the top when a well number is specified
         if well_num:
+            # Normalise the requested well number (strip leading zeros)
+            target_wnum = str(well_num).lstrip('0') or '0'
             well_results = []
             dgh_results = []
             other_results = []
-            # Try to find the specific DGH split file for this well
-            if well_num:
-                DGH_FILENAME = f"DGH_EZZ{well_num}.pdf"
-            else:
-                DGH_FILENAME = "DGH_INTRO.pdf"
+            DGH_FILENAME = f"DGH_EZZ{well_num}.pdf"
+
             for r in main_results:
                 chunk_well = r.metadata.get('well_num', '')
                 chunk_file = r.metadata.get('filename', '')
-                if chunk_well == well_num:
+                # FIX 2: Use strict equality helper
+                if _well_num_matches(chunk_well, target_wnum):
                     well_results.append(r)
                 elif chunk_file == DGH_FILENAME:
                     dgh_results.append(r)
@@ -385,19 +475,17 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                 from langchain.schema import Document as LCDoc
                 import re as _re
                 well_pattern = _re.compile(
-                    rf'(?:EZZAOUIA|EZZ)\s*#?\s*0*{well_num}\b', _re.IGNORECASE)
+                    rf'(?:EZZAOUIA|EZZ)\s*#?\s*0*{re.escape(target_wnum)}\b', _re.IGNORECASE)
                 for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas']):
                     if doc[:80] in existing_keys:
                         continue
                     if well_pattern.search(doc):
                         dgh_results.append(LCDoc(page_content=doc, metadata=meta))
                         existing_keys.add(doc[:80])
-                dgh_extra = None  # skip the old query block
                 logger.info(f"DGH keyword fetch: {len(dgh_results)} total DGH chunks")
             except Exception as e:
                 logger.warning(f"DGH extra fetch error: {e}")
 
-            # For small single-page files, include ALL chunks (not just top matches)
             if len(dgh_results) < 30:
                 try:
                     all_dgh = col.get(
@@ -413,7 +501,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                 except Exception as e:
                     logger.warning(f"Small file fetch error: {e}")
 
-            # Keyword fallback — search for exact technical terms when semantic fails
             TECHNICAL_KEYWORDS = [
                 'rejected', 'lost thickness', 'sucker rod', 'wash out',
                 'tubing failure', 'wall thickness', 'integrity failure',
@@ -442,7 +529,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
 
             main_results = well_results + dgh_results + other_results
 
-            # Sort chunks: prioritize by year mentioned in query, then by keywords
             if well_num:
                 import re as _re
                 year_in_query = _re.search(r'\b(20\d{2}|19\d{2})\b', query)
@@ -471,7 +557,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                 f"{len(dgh_results)} DGH, {len(other_results)} others"
             )
 
-        # Try to find the specific DGH split file for this well
         if well_num:
             DGH_FILENAME = f"DGH_EZZ{well_num}.pdf"
         else:
@@ -1138,7 +1223,6 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
     total_oil = sum(float(r.get('total_oil', 0) or 0) for r in rows)
     import calendar as _cal
     total_days = sum(_cal.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
-    # Count only months that have production data
     months_with_data = len([r for r in rows if float(r.get('total_oil', 0) or 0) > 0])
     avg_bopd = (total_oil / total_days) if total_days > 0 else 0.0
 
@@ -1446,17 +1530,14 @@ def generate_suggestions(question, well=None, lang='fr'):
 
 def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, use_docs=True):
     """Detect question type and return the appropriate prompt key."""
-    # If SQL is disabled (from docs was used), force document_qa
     if not use_sql or doc_id or doc_ids:
         return 'document_qa'
 
     q = question.lower()
 
-    # from db always → production_kpis
     if 'from db' in q or 'from database' in q:
         return 'production_kpis'
 
-    # TCM/meeting/report questions → always document_qa
     if any(w in q for w in [
         'tcm', 'ocm', 'meeting', 'réunion', 'decisions', 'discussed',
         'reported', 'minutes', 'mom', 'agenda', 'presentation',
@@ -1466,11 +1547,9 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
 
     has_well = well is not None
 
-    # Operational history — DimDate comments
     if needs_comments:
         return 'operational_history'
 
-    # Well analysis — combines SQL + docs
     if has_well and any(w in q for w in [
         'analyse', 'analysis', 'analyser', 'tell me about',
         'give me', 'overview', 'deep dive', 'about ezz',
@@ -1478,14 +1557,12 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
     ]):
         return 'well_analysis'
 
-    # Field summary
     if any(w in q for w in [
         'field', 'champ', 'global', 'summary', 'résumé',
         'bilan', 'all wells', 'tous les puits', 'overview'
     ]) and not has_well:
         return 'field_summary'
 
-    # Well-specific investigative questions → document_qa
     if has_well and any(w in q for w in [
         'caused', 'why', 'what happened', 'failure', 'failed',
         'history', 'when did', 'how did', 'what was', 'describe',
@@ -1496,15 +1573,59 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
     ]):
         return 'document_qa'
 
-    # Production KPIs — default for well questions with SQL
     if has_well or any(w in q for w in [
         'bopd', 'bsw', 'gor', 'production', 'top', 'ranking',
         'meilleur', 'classement', 'trend', 'monthly'
     ]):
         return 'production_kpis'
 
-    # Default — document Q&A
     return 'document_qa'
+
+
+def _build_well_confusion_rule(well_ref):
+    """
+    FIX 4: Build a dynamic well confusion guard for PROMPT_DOCUMENT_QA.
+    Prevents the LLM from mixing up EZZ1/EZZ11 or any adjacent well numbers.
+    Returns an empty string when no guard is needed.
+    """
+    if not well_ref:
+        return ""
+    wnum = re.search(r'\d+', well_ref.well_code)
+    if not wnum:
+        return ""
+    n = wnum.group().lstrip('0') or '0'
+    # Build a list of similar-looking well numbers that could be confused
+    similar = []
+    if n == '1':
+        similar = ['11']
+    elif n == '11':
+        similar = ['1']
+    elif n == '2':
+        similar = ['12']
+    elif n == '12':
+        similar = ['2']
+    # Add generic single-digit / double-digit confusion pairs
+    if len(n) == 1:
+        similar.append(f"1{n}")  # e.g. EZZ3 → EZZ13
+    elif len(n) == 2 and n.startswith('1'):
+        similar.append(n[1])     # e.g. EZZ13 → EZZ3
+
+    similar = list(set(similar))  # deduplicate
+
+    if not similar:
+        rule = (
+            f"- The question is about EZZ{n} ONLY. "
+            f"Answer exclusively about EZZ{n}. NEVER mix data from other wells.\n"
+        )
+    else:
+        others = " and ".join(f"EZZ{s}" for s in similar)
+        rule = (
+            f"- The question asks about EZZ{n} — answer ONLY about EZZ{n}, "
+            f"NEVER about {others}\n"
+            f"- EZZ{n} and {others} are COMPLETELY DIFFERENT wells — "
+            f"never confuse or mix their data\n"
+        )
+    return rule
 
 
 def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=None):
@@ -1584,8 +1705,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             'srp', 'workover', 'shut-in', 'shut in', 'fermeture', 'reprise',
             'depuis', 'depuis quand', 'how long', 'combien de temps',
         ]
-        # "from docs" explicitly disables DimDate comments
-        use_comments = not (use_sql == False)  # use_sql is False when "from docs" is set
+        use_comments = not (use_sql == False)
         needs_comments = (
             any(kw in q_lower for kw in COMMENT_TRIGGER_KEYWORDS_EARLY)
             and not doc_id
@@ -1614,25 +1734,26 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             or is_doc_priority
         )
 
-        # ✅ FIX 2: Reduced k for doc-priority questions from 20 to 8.
-        # Fewer, more targeted chunks fit better within the 8192 context window
-        # and reduce noise that confuses the LLM.
         if is_doc_priority:
-            retrieval_k = 8
+            retrieval_k = 20
         elif is_doc_only_question:
-            retrieval_k = 10
+            retrieval_k = 15
         else:
             retrieval_k = 6
 
-        # When "from docs" is explicit and no file attached, retrieve more chunks
         if 'from docs' in q_lower and not doc_id and not doc_ids:
             retrieval_k = 20
 
         logger.info(f"Retrieval k={retrieval_k} ({'doc-priority' if is_doc_priority else 'doc/comments' if is_doc_only_question else 'production'})")
 
-        # Extract well number for targeted retrieval
+        FIELD_WIDE_DOC_KEYWORDS = [
+            'all wells', 'tous les puits', 'chaque puits', 'every well',
+            'for each well', 'summary table', 'tableau', 'summarize',
+            'résumé de tous', 'current status of all',
+        ]
+        is_field_wide_doc = any(kw in q_lower for kw in FIELD_WIDE_DOC_KEYWORDS)
+
         detected_well_num = None
-        # Don't boost DGH for TCM/meeting/report questions
         TCM_KEYWORDS = ['tcm', 'ocm', 'meeting', 'mom', 'minutes', 'decisions',
                         'discussed', 'reported', 'budget', 'forecast', 'hse']
         is_tcm_question = any(kw in q_lower for kw in TCM_KEYWORDS)
@@ -1642,13 +1763,23 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             if num:
                 detected_well_num = num.group()
 
-        doc_results = retrieve_smart(
-            query=search_query, doc_id=doc_id, filename=filename,
-            k=retrieval_k, well_num=detected_well_num
-        )
+        # For field-wide questions, ignore attached file and search globally
+        effective_doc_id = None if is_field_wide_doc else doc_id
+        effective_filename = None if is_field_wide_doc else filename
+
+        # For field-wide questions, skip the initial retrieval entirely
+        # The is_field_wide_doc block will build its own per-well context
+        if is_field_wide_doc:
+            doc_results = []
+            logger.info("Field-wide question — skipping initial retrieval")
+        else:
+            doc_results = retrieve_smart(
+                query=search_query, doc_id=effective_doc_id,
+                filename=effective_filename,
+                k=retrieval_k, well_num=detected_well_num
+            )
         logger.info(f"DOC RESULTS: {len(doc_results)} chunks")
 
-        # For workover history questions from docs, force all DGH chunks for the well
         if 'workover' in q_lower and 'from docs' in q_lower and detected_well_num:
             vs = get_global_vectorstore()
             col = vs._collection
@@ -1661,11 +1792,9 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas'])
                 ]
                 existing = {r.page_content[:80] for r in doc_results}
-                new_chunks = [d for d in forced if d.page_content[:80] not in existing]
                 doc_results = forced + [r for r in doc_results if r.page_content[:80] not in {d.page_content[:80] for d in forced}]
                 logger.info(f"Workover forced: all {len(forced)} chunks from {DGH_FILE}")
 
-        # If user mentions a specific TCM/OCM number, force those documents
         tcm_match = re.search(r'\b(?:from\s+)?(tcm|ocm)\s*#?\s*(\d+)\b', q_lower)
         if tcm_match:
             tcm_num = tcm_match.group(2)
@@ -1679,7 +1808,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             for fname in tcm_files:
                 r = col.get(where={'filename': fname}, include=['documents', 'metadatas'])
                 for doc, meta in zip(r['documents'], r['metadatas']):
-                    from langchain.schema import Document as LCDoc
                     tcm_chunks.append(LCDoc(page_content=doc, metadata=meta))
             if tcm_chunks:
                 doc_results = tcm_chunks + doc_results
@@ -1702,7 +1830,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 doc_results = year_boosted[:8] + doc_results
                 logger.info(f"Year {target_yr} boosted: {len(year_boosted)} chunks added")
 
-        # Detect task type early so later logic (SQL exclusion, prompt) can use it
         well_ref = normalize_well_code(question)
         task = _detect_task(question, doc_id, doc_ids, needs_comments, well_ref, use_sql=use_sql, use_docs=use_docs)
         logger.info(f"Task detected: {task}")
@@ -1721,9 +1848,8 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         doc_context = ""
         if doc_results:
-            # Sort chunks: prioritize those matching year/keywords from question
-            import re as _re
-            year_in_q = _re.search(r'\b(20\d{2}|19\d{2})\b', question)
+            import re as _re2
+            year_in_q = _re2.search(r'\b(20\d{2}|19\d{2})\b', question)
             target_year = year_in_q.group(1) if year_in_q else None
 
             PRIORITY_TERMS = [
@@ -1732,7 +1858,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 'circulation loss', 'cause', 'reason', 'problem', 'issue',
                 'workover', 'sequences of events', 'rig accepted', 'pooh',
                 'completion', 'packer', 'tubing hanger', 'july', 'april', 'october',
-                '2013', '2015', '2017'
+                'up to current', 'produced without interruption', 'stable'
             ]
 
             def doc_chunk_score(d):
@@ -1744,19 +1870,135 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     score += 5
                 return score
 
-            sorted_results = sorted(doc_results, key=doc_chunk_score, reverse=True)
+            if detected_well_num and not is_field_wide_doc:
+                expected_file = f"DGH_EZZ{detected_well_num}.pdf"
+                well_chunks = [d for d in doc_results
+                               if d.metadata.get('filename') == expected_file]
+                other_chunks = [d for d in doc_results
+                                if d.metadata.get('filename') != expected_file]
 
-            sources = {}
+                if well_chunks:
+                    # Define high-value keywords for tubing integrity questions
+                    HIGH_VALUE_TERMS = [
+                        'integrity', 'rejected', 'leak', 'failure', 'workover',
+                        'lost thickness', 'sucker rod', 'wash out', 'casing',
+                        'closed', 'shut-in', 'shut in', 'abandoned', 'plugged',
+                        'fish', 'up to current', 'produced without',
+                        'sequences of events', 'well status', 'well resumed',
+                        'cross channeling', 'cross channel', 'casing was failure',
+                        'tubing test', 'pressure test', 'packer test',
+                        'no additional flow', 'ceased production', 'bsw',
+                        'water cut', 'disposal', 'injection', 'sidetrack',
+                        'p&a', 'plug and abandon', 'cemented', 'perforated',
+                        'well shut in', 'well shut-in', 'production stopped',
+                        'intervention', 'slickline', 'swabbing', 'logging',
+                        'rig released', 'well resumed production',
+                        'srp well intervention', 'december 2015',
+                        'permanently closed', 'zebbag water', 'jurassic layers',
+                        'no flow', 'no returns'
+                    ]
+                    SKIP_TERMS = [
+                        'mail address', 'immeuble monia', 'tél :', 'fax :',
+                        '--- page', 'les berges du lac', 'rc : b116521996',
+                        'mf : 0437877x', 'contact@maretap'
+                    ]
+
+                    # Separate high-value from low-value chunks
+                    high_value = []
+                    low_value = []
+                    for c in well_chunks:
+                        content = c.page_content.lower()
+                        # Only skip if chunk is mostly header (< 100 chars of real content)
+                        non_header_content = content
+                        for skip in SKIP_TERMS:
+                            non_header_content = non_header_content.replace(skip, '')
+                        if len(non_header_content.strip()) < 10:
+                            continue  # Skip chunks that are ONLY headers
+                        if any(term in content for term in HIGH_VALUE_TERMS):
+                            high_value.append(c)
+                        else:
+                            low_value.append(c)
+
+                    # Sort each group by chunk_index (chronological order)
+                    all_high_sorted = sorted(
+                        high_value,
+                        key=lambda d: int(d.metadata.get('chunk_index', 0))
+                    )
+                    # Put last 5 chunks first (most likely to contain current status)
+                    if len(all_high_sorted) > 5:
+                        late_chunks = all_high_sorted[-5:]
+                        early_chunks = all_high_sorted[:-5]
+                        high_value_ordered = late_chunks + early_chunks
+                    else:
+                        high_value_ordered = all_high_sorted
+
+                    low_value_ordered = sorted(
+                        low_value,
+                        key=lambda d: int(d.metadata.get('chunk_index', 0))
+                    )
+
+                    # For single-well questions: use ONLY chunks from this well's file
+                    # Never include chunks from other wells
+                    sorted_results = high_value_ordered + low_value_ordered[:5]
+
+                    # Force-inject last 2 chunks by querying ChromaDB directly
+                    # (well_chunks only contains the k=20 retrieved chunks — chunk 41
+                    #  may score low semantically and never appear in doc_results)
+                    try:
+                        from langchain.schema import Document as LCDoc
+                        _vs = get_global_vectorstore()
+                        _col = _vs._collection
+                        _all_file = _col.get(
+                            where={'filename': expected_file},
+                            include=['documents', 'metadatas']
+                        )
+                        if _all_file and _all_file.get('documents'):
+                            _all_chunks = sorted(
+                                [LCDoc(page_content=doc, metadata=meta)
+                                 for doc, meta in zip(_all_file['documents'], _all_file['metadatas'])],
+                                key=lambda d: int(d.metadata.get('chunk_index', 0))
+                            )
+                            logger.info(f"ChromaDB direct: {len(_all_chunks)} total chunks in {expected_file}")
+                            # Always force last 2 chunks to position 0
+                            # Remove any existing occurrence first, then prepend
+                            for _tail_chunk in reversed(_all_chunks[-2:]):
+                                sorted_results = [
+                                    d for d in sorted_results
+                                    if d.page_content[:50] != _tail_chunk.page_content[:50]
+                                ]
+                                sorted_results = [_tail_chunk] + sorted_results
+                                logger.info(
+                                    f"Force-injected chunk index "
+                                    f"{_tail_chunk.metadata.get('chunk_index')} "
+                                    f"at position 0 from {expected_file}"
+                                )
+                    except Exception as _e:
+                        logger.warning(f"Force-inject failed: {_e}")
+                    logger.info(
+                        f"Single-well filter: {len(high_value)} high-value, "
+                        f"{len(low_value)} low-value chunks for {expected_file}"
+                    )
+                else:
+                    sorted_results = sorted(doc_results, key=doc_chunk_score, reverse=True)
+            else:
+                sorted_results = sorted(doc_results, key=doc_chunk_score, reverse=True)
+
+            # Build doc_context preserving sorted_results order
+            # (dict grouping was destroying the Force-inject ordering)
             for d in sorted_results:
                 src = d.metadata.get('filename', 'Document')
-                sources.setdefault(src, []).append(d.page_content[:600])
-
-            for src, chunks in sources.items():
+                # Remove header noise to expose actual content
+                import re as _re3
+                _content = d.page_content
+                _content = _re3.sub(
+                    r'(Mail address|Immeuble Monia|Les Berges|Tél :|Fax :|MF :|RC :|email :)[^\n]*\n?',
+                    '', _content, flags=_re3.IGNORECASE
+                )
+                _content = _re3.sub(r'\n{3,}', '\n', _content)
+                _cleaned = ' '.join(_content.split())[:600]
                 doc_context += f"\n--- Source: {src} ---\n"
-                for chunk in chunks:
-                    doc_context += chunk + "\n---\n"
+                doc_context += _cleaned + "\n---\n"
 
-        # If a specific technical finding is found in chunks, highlight it explicitly
         HIGHLIGHT_PATTERNS = [
             (r'N\.B[:\s]+(.{20,200})', 'KEY FINDING'),
             (r'Rejected\s+\d+\s+tubing.{0,150}', 'CAUSE OF FAILURE'),
@@ -1765,7 +2007,10 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             (r'circulation loss.{0,150}', 'DRILLING ISSUE'),
         ]
         highlights = []
-        for d in doc_results:
+        # Only highlight from the requested well's file
+        well_docs_for_highlight = [d for d in doc_results
+                                   if d.metadata.get('filename') == f"DGH_EZZ{detected_well_num}.pdf"] if detected_well_num else doc_results
+        for d in well_docs_for_highlight:
             for pattern, label in HIGHLIGHT_PATTERNS:
                 matches = re.findall(pattern, d.page_content, re.IGNORECASE | re.DOTALL)
                 for match in matches:
@@ -1778,8 +2023,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             doc_context = f"=== KEY EXTRACTED FINDINGS ===\n{highlight_text}\n=== END KEY FINDINGS ===\n\n" + doc_context
             logger.info(f"Highlighted {len(highlights)} key findings")
 
-        # If user attached a specific file, skip SQL and DimDate entirely
-        if doc_id or doc_ids:
+        if (doc_id or doc_ids) and not is_field_wide_doc:
             sql_context = ""
             use_sql = False
             needs_comments = False
@@ -1867,7 +2111,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     comments_rows = filtered
                     logger.info(f"Post-filtered: {len(comments_rows)} rows")
 
-            # For workover questions, filter to only entries mentioning rig/WO operations
             if 'workover' in q_lower and comments_rows:
                 WO_TERMS = ['rig', 'work over', 'workover', 'w.o', 'wo ',
                             'pooh', 'rih', 'completion', 'packer', 'ulysse', 'ctf']
@@ -1889,28 +2132,88 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 comments_context += "=== END COMMENTS ===\n"
                 logger.info(f"DimDate comments injected: {len(comments_rows)} rows")
 
-        FIELD_WIDE_DOC_KEYWORDS = [
-            'all wells', 'tous les puits', 'chaque puits', 'every well',
-            'for each well', 'summary table', 'tableau', 'summarize',
-            'résumé de tous', 'current status of all',
-        ]
-        is_field_wide_doc = any(kw in q_lower for kw in FIELD_WIDE_DOC_KEYWORDS)
-
         if is_field_wide_doc:
             ALL_WELL_NUMS = ['1', '2', '3', '4', '5', '6', '7', '8',
                              '9', '10', '11', '12', '14', '15', '16', '17', '18']
+
+            topic_keywords = question.lower()
+            if 'tubing integrity' in topic_keywords or 'tubing' in topic_keywords:
+                specific_query_suffix = "tubing integrity failure rejected workover completion packer leak corroded shut closed fish lost disposal abandoned plugged"
+            elif 'workover' in topic_keywords:
+                specific_query_suffix = "workover intervention rig completion POOH RIH sequences events"
+            elif 'production' in topic_keywords or 'bopd' in topic_keywords:
+                specific_query_suffix = "production BOPD oil rate shut-in average daily"
+            elif 'casing' in topic_keywords:
+                specific_query_suffix = "casing integrity test leak failure corrosion"
+            elif 'completion' in topic_keywords:
+                specific_query_suffix = "completion design packer tubing hanger jet pump sucker rod"
+            else:
+                specific_query_suffix = question
+
             per_well_context = "FIELD-WIDE RAG CONTEXT:\n" + "=" * 50 + "\n"
+            per_well_context += f"Topic: {question}\n" + "=" * 50 + "\n"
+
+            INTEGRITY_TERMS = [
+                'tubing', 'integrity', 'rejected', 'workover', 'completion',
+                'packer', 'leak', 'failure', 'closed', 'shut', 'corroded',
+                'disposal', 'abandoned', 'plugged', 'fish', 'lost', 'casing',
+                'standing valve', 'sucker rod', 'jet pump', 'intervention'
+            ]
+
             for wnum in ALL_WELL_NUMS:
-                well_query = f"EZZ{wnum} {question}"
-                results = retrieve_smart(query=well_query, k=5, well_num=wnum)
-                per_well_context += f"\n[EZZ-{wnum.zfill(2)}]\n"
+                well_query = f"EZZAOUIA#{wnum} EZZ{wnum} EZZ-{wnum} EZZ #{wnum} {specific_query_suffix}"
+
+                # Try tagged retrieval first
+                results = retrieve_smart(query=well_query, k=15, well_num=wnum)
+
+                per_well_context += f"\n=== WELL EZZ-{wnum.zfill(2)} START ===\n"
+
                 if results:
-                    for r in results[:2]:
-                        per_well_context += r.page_content[:300] + "\n"
+                    import re as _re
+                    well_pattern = _re.compile(
+                        rf'(?:EZZAOUIA|EZZ)\s*#?\s*0*{_re.escape(wnum)}\b(?!\d)',
+                        _re.IGNORECASE
+                    )
+
+                    # Skip useless header/footer chunks
+                    SKIP_TERMS = [
+                        'mail address', 'immeuble monia', 'tél :', 'fax :',
+                        '--- page', 'les berges du lac', 'rc : b116521996',
+                        'mf : 0437877x', 'contact@maretap'
+                    ]
+
+                    # Step 1: Remove header/footer chunks
+                    filtered = [
+                        r for r in results
+                        if not any(skip in r.page_content.lower() for skip in SKIP_TERMS)
+                    ]
+
+                    # Step 2: Score remaining chunks by topic relevance
+                    def score_chunk(r):
+                        content = r.page_content.lower()
+                        score = 0
+                        if any(t in content for t in INTEGRITY_TERMS):
+                            score += 10
+                        if well_pattern.search(r.page_content):
+                            score += 5
+                        return score
+
+                    filtered_scored = sorted(filtered, key=score_chunk, reverse=True)
+
+                    # Step 3: Take top 3 most relevant chunks
+                    top_chunks = filtered_scored[:3] if filtered_scored else results[:2]
+
+                    for r in top_chunks:
+                        # Prefix every chunk with its well label
+                        per_well_context += f"[EZZ-{wnum.zfill(2)} DATA] " + r.page_content[:600] + "\n---\n"
+                    per_well_context += f"=== WELL EZZ-{wnum.zfill(2)} END ===\n"
                 else:
-                    per_well_context += "  No chunks found.\n"
+                    per_well_context += f"  No document chunks found.\n=== WELL EZZ-{wnum.zfill(2)} END ===\n"
+
             doc_context = per_well_context
-            logger.info("Field-wide RAG: done")
+            logger.info(f"Field-wide RAG done: {len(ALL_WELL_NUMS)} wells processed")
+
+            
 
         sql_has_data = bool(sql_context and len(sql_context.strip()) > 50)
         production_keywords = [
@@ -1929,12 +2232,10 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             logger.info("SQL data authoritative — documents excluded")
 
         history_text = ""
-        # Only include history if it's about the same well to avoid cross-contamination
         if history and len(history) > 0:
             last = history[-1]
             last_q = last.get('question', '').lower()
             current_q = question.lower()
-            # Only include if same well is mentioned in both questions
             well_in_last = re.search(r'ezz\s*#?\s*(\d+)', last_q)
             well_in_current = re.search(r'ezz\s*#?\s*(\d+)', current_q)
             if well_in_last and well_in_current and well_in_last.group(1) == well_in_current.group(1):
@@ -1976,10 +2277,8 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 "Ne jamais basculer vers l'anglais ou l'arabe."
             )
 
-        # ✅ FIX 3: Truncate doc_context to avoid exceeding num_ctx.
-        # Keep the most relevant chunks (first 4000 chars) so the LLM
-        # always sees real context rather than a truncated/empty prompt.
-        MAX_DOC_CONTEXT_CHARS = 15000
+        # Field-wide questions need more context (17 wells × chunks)
+        MAX_DOC_CONTEXT_CHARS = 32000 if is_field_wide_doc else 28000
         if len(doc_context) > MAX_DOC_CONTEXT_CHARS:
             doc_context = doc_context[:MAX_DOC_CONTEXT_CHARS] + "\n[... context truncated for length ...]"
             logger.info(f"Doc context truncated to {MAX_DOC_CONTEXT_CHARS} chars")
@@ -1990,17 +2289,18 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         logger.info(f"FINAL CONTEXT IN PROMPT - DOC: {len(doc_context)} chars, SQL: {len(sql_context)} chars")
 
-        # Select specialized prompt based on task detected earlier
+        # FIX 4: Build the dynamic well confusion rule and inject it into PROMPT_DOCUMENT_QA
+        well_confusion_rule = _build_well_confusion_rule(well_ref)
+
         task_prompts = {
             'well_analysis': PROMPT_WELL_ANALYSIS,
             'production_kpis': PROMPT_PRODUCTION_KPIS,
-            'document_qa': PROMPT_DOCUMENT_QA,
+            'document_qa': PROMPT_DOCUMENT_QA.format(well_confusion_rule=well_confusion_rule),
             'operational_history': PROMPT_OPERATIONAL_HISTORY,
             'field_summary': PROMPT_FIELD_SUMMARY,
         }
-        selected_prompt = task_prompts.get(task, PROMPT_DOCUMENT_QA)
+        selected_prompt = task_prompts.get(task, PROMPT_DOCUMENT_QA.format(well_confusion_rule=well_confusion_rule))
 
-        # Replace well_code placeholder if present
         if well_ref:
             selected_prompt = selected_prompt.replace('{well_code}', well_ref.well_code)
 
@@ -2046,8 +2346,19 @@ ANSWER:"""
         logger.info(f"PROMPT FIRST 500: {prompt[:500]}")
         logger.info(f"DOC CONTEXT SAMPLE: {doc_context[:300]}")
         logger.info(f"PROMPT LAST 500: {prompt[-500:]}")
-        response = get_llm().invoke(prompt)
-        answer = response.strip()
+        try:
+            response = get_llm().invoke(prompt)
+            answer = response.strip()
+        except Exception as llm_error:
+            logger.error(f"LLM invoke error: {llm_error}")
+            if 'context' in str(llm_error).lower() or len(prompt) > 40000:
+                logger.warning("Prompt too large — retrying with reduced context")
+                doc_context_short = doc_context[:8000] + "\n[... context reduced due to size ...]"
+                prompt_short = prompt.replace(doc_context, doc_context_short)
+                response = get_llm().invoke(prompt_short)
+                answer = response.strip()
+            else:
+                raise
         if lang == 'en':
             answer = _force_english_month_names(answer)
         answer = _sanitize_answer_language(answer, lang)
@@ -2058,7 +2369,10 @@ ANSWER:"""
         suggestions = generate_suggestions(question, well=well, lang=lang)
 
         if user:
-            update_user_memory(user, question, answer, well=well)
+            try:
+                update_user_memory(user, question, answer, well=well)
+            except Exception as mem_err:
+                logger.warning(f"Memory update skipped — DB connection: {mem_err}")
 
         return {'answer': answer, 'chart_data': chart_data, 'suggestions': suggestions}
 

@@ -14,6 +14,49 @@ logger = logging.getLogger('apps')
 
 TODAY = datetime.date.today().strftime('%d/%m/%Y')
 
+# ============================================================================
+# TUNING CONSTANTS — centralised so they are easy to adjust and reason about.
+#
+# num_ctx = 16384 tokens. A rough rule of thumb is ~3.3 chars per token, so
+# the FULL prompt budget is roughly 50,000 chars. We must reserve room for:
+#   - the system prompt (PROMPT_*)         ~2,500-3,500 chars
+#   - the SQL context                      up to 6,000 chars
+#   - the operator comments                up to ~3,000 chars
+#   - the conversation history             ~500 chars
+#   - the model's OWN generated answer     ~7,000 chars (2048 tokens)
+# That leaves roughly 18,000-24,000 chars for the document context.
+# ============================================================================
+
+# FIX 1: chunk content is no longer cut at 600 chars. We index up to 2000-char
+#        chunks, so cutting at 600 threw away ~70% of every chunk. 1800 keeps
+#        almost the whole chunk while leaving a small safety margin.
+CHUNK_CONTENT_CHARS = 1800
+
+# FIX 3: doc context budget kept BELOW num_ctx so Ollama never silently
+#        truncates the START of the prompt (system instructions / first chunks).
+MAX_DOC_CONTEXT_CHARS_NORMAL = 18000
+MAX_DOC_CONTEXT_CHARS_FIELD = 24000
+
+# FIX 8: SQL context is no longer cut at 1000 chars. A field analysis emits a
+#        field summary + 20-well ranking + reservoir block — easily 4-5k chars.
+#        Cutting at 1000 left the LLM with ~6 wells out of 20.
+MAX_SQL_CONTEXT_CHARS = 6000
+
+# FIX 4: degraded retry now keeps far more context (and logs a visible warning).
+RETRY_DOC_CONTEXT_CHARS = 12000
+
+# FIX 10: hard cap on the NUMBER of doc chunks AFTER relevance sorting, so the
+#         char-based truncation almost never fires and never cuts well-ranked
+#         chunks blindly.
+MAX_DOC_CHUNKS_NORMAL = 18
+MAX_DOC_CHUNKS_FIELD = 60
+
+# FIX 5: field-wide questions now use 4 chunks of 1200 chars per well
+#        (instead of 3 chunks of 600).
+FIELD_WIDE_CHUNKS_PER_WELL = 4
+FIELD_WIDE_CHARS_PER_CHUNK = 1200
+
+
 PROMPT_WELL_ANALYSIS = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Write a complete well analysis combining SQL production data AND document history.
 
@@ -88,7 +131,7 @@ RULES:
 - Respond in same language as the question
 """
 
-# FIX 4: PROMPT_DOCUMENT_QA no longer hardcodes EZZ1 vs EZZ11.
+# FIX 4 (original numbering): PROMPT_DOCUMENT_QA no longer hardcodes EZZ1 vs EZZ11.
 # The well confusion rule is injected dynamically in ask() via {well_confusion_rule}.
 PROMPT_DOCUMENT_QA = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Answer questions by extracting information from the provided documents.
@@ -128,6 +171,16 @@ RULES:
   * BOLD critical findings: **rejected joints**, **tubing leak**, **integrity failure**
 - For workover history: create ONE row per workover year, summarizing the purpose
 - NEVER list individual drilling steps — only summarize the campaign objective and result
+- For a workover OBJECTIVE or PURPOSE question:
+  * The objective is stated at the START of the workover description
+    (e.g. "Pull existing completion", "Replace tubing due to...",
+    "due to confirmed hole in tubing").
+  * The packer setting depth, rig release date, and final completion
+    depths are the RESULT of the workover, NOT its objective. NEVER
+    report a final packer depth or a rig release date as the goal.
+  * Read the workover section from its very first line — the REASON
+    for the intervention always comes before the execution steps and
+    the final result.
 - Extract facts directly: dates, causes, actions, results
 - BOLD key facts: **58 tubing joints rejected**, **April 24th, 2015**
 - Always cite which document the answer comes from
@@ -135,7 +188,7 @@ RULES:
 - Only say "The indexed documents do not contain specific information about this query." if context has ZERO relevant content
 - When a chunk starts with "EZZ#9:", extract it directly for EZZ9 questions
 - NEVER add information not present in the documents
-- Maximum 6 sentences for narrative answers (NOT for tables — tables have no sentence limit)
+- For narrative answers, write a complete and thorough explanation of up to 12 sentences (NOT for tables — tables have no sentence limit). Do not artificially shorten the answer if the context contains more relevant facts.
 
 - For field-wide questions (all wells / tous les puits / every well):
   * CRITICAL: Each chunk is labeled [EZZ-XX DATA] — this label shows
@@ -255,17 +308,27 @@ _global_vectorstore = None
 
 
 def get_llm():
+    """
+    FIX 2:  num_predict was -2 (= 'fill remaining context'). On CPU with
+            llama3.1:8b this makes generation extremely slow, and when the
+            timeout was hit the answer was cut mid-sentence. We now use a
+            firm cap (2048 tokens) and a longer timeout (300s).
+    FIX 11: repeat_penalty lowered from 1.15 to 1.08. A high penalty pushes
+            the model toward the EOS token early inside markdown tables
+            (where 'STB/j', well names, '✅' legitimately repeat), cutting
+            tables mid-way.
+    """
     global _llm
     if _llm is None:
         _llm = OllamaLLM(
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
-            num_ctx=16384,    
-            num_predict=-2,
+            num_ctx=16384,
+            num_predict=2048,      # FIX 2: firm cap instead of -2
             top_p=0.85,
-            repeat_penalty=1.15,
-            timeout=180,
+            repeat_penalty=1.08,   # FIX 11: lowered from 1.15
+            timeout=300,           # FIX 2: raised from 180s
         )
     return _llm
 
@@ -306,21 +369,30 @@ def get_global_vectorstore():
     return _global_vectorstore
 
 
+def _chunk_key(chunk_text):
+    """
+    FIX 7: deduplication helper. Previously chunks were deduplicated on their
+           first 80-100 chars. Two distinct chunks that share a repeated PDF
+           header ('DGH EZZAOUIA#11 — Well History — Page X ...') were treated
+           as duplicates and the SECOND (containing different information) was
+           thrown away. We now hash the FULL chunk content.
+    """
+    return hashlib.md5((chunk_text or "").encode('utf-8')).hexdigest()
+
+
 def _extract_well_num_from_chunk(chunk):
     """
-    FIX 2: Robust well number extraction that avoids EZZ1 matching EZZ11.
-    Matches the LONGEST number at a word boundary to prevent prefix collisions.
-    E.g. 'EZZAOUIA#11' returns '11', not '1'.
+    FIX 2 (original numbering): Robust well number extraction that avoids EZZ1
+    matching EZZ11. Matches the LONGEST number at a word boundary to prevent
+    prefix collisions. E.g. 'EZZAOUIA#11' returns '11', not '1'.
     """
     import re as _re
-    # Find all candidate matches with their positions
     matches = list(_re.finditer(
         r'(?:EZZ|EZZAOUIA)\s*#?\s*0*(\d{1,2})(?!\d)',
         chunk, _re.IGNORECASE
     ))
     if not matches:
         return None
-    # Among all matches, return the number that appears most frequently
     from collections import Counter
     nums = [m.group(1).lstrip('0') or '0' for m in matches]
     most_common = Counter(nums).most_common(1)[0][0]
@@ -335,19 +407,14 @@ def index_document(text, metadata=None, doc_id=None):
         metadata['doc_id'] = str(doc_id)
 
     try:
-        # Use smaller chunks for small files (DGH per-well files)
-        # and larger chunks for big files (field-wide documents)
         estimated_pages = max(1, len(text) // 2000)
         if estimated_pages <= 3:
-            # Very small files (EZZ-03, 05, 06, 07) — keep all content together
             chunk_size = 2000
             chunk_overlap = 200
         elif estimated_pages <= 10:
-            # Small files (EZZ-01, 04, 10, 11) — medium chunks
             chunk_size = 1200
             chunk_overlap = 300
         else:
-            # Large files (EZZ-02, 09, 17, 18) — smaller chunks for precision
             chunk_size = 800
             chunk_overlap = 200
 
@@ -372,18 +439,14 @@ def index_document(text, metadata=None, doc_id=None):
                 'chunk_index': i,
                 'chunk_total': len(chunks)
             }
-            # PRIMARY: Extract well number from filename (most reliable)
-            # Filename format: DGH_EZZ1.pdf, DGH_EZZ17.pdf, etc.
             import re as _re
             _filename = metadata.get('filename', '')
             filename_well = _re.search(
                 r'DGH_EZZ(\d{1,2})\.pdf', _filename, _re.IGNORECASE)
 
             if filename_well:
-                # Tag ALL chunks from this file with the well number
                 chunk_meta['well_num'] = filename_well.group(1).lstrip('0') or '0'
             else:
-                # FALLBACK: Try to extract from chunk text
                 well_num = _extract_well_num_from_chunk(chunk)
                 if well_num:
                     chunk_meta['well_num'] = well_num
@@ -402,13 +465,57 @@ def index_document(text, metadata=None, doc_id=None):
 
 
 def _well_num_matches(chunk_well, target_well):
-    """
-    FIX 2: Strict equality check that prevents '1' matching '11' or vice versa.
-    Both values are stripped of leading zeros before comparison.
-    """
+    """Strict equality check that prevents '1' matching '11' or vice versa."""
     if not chunk_well or not target_well:
         return False
     return chunk_well.lstrip('0') == target_well.lstrip('0')
+
+
+def _rank_attached_file_chunks(query, all_docs, k):
+    """
+    FIX 9: when a file is attached, the previous code returned ALL chunks raw.
+           On a large DGH PDF that is 60-100 chunks; after per-chunk truncation
+           and the global char cap, the SECOND HALF of the document never
+           reached the LLM — and that is exactly where the 'current status'
+           sits. We now rank the chunks by relevance and keep the most useful
+           ones, but we ALSO guarantee the last 2 chunks (current status) are
+           included.
+    """
+    if len(all_docs) <= k:
+        return all_docs
+
+    try:
+        embeddings = get_embeddings()
+        q_vec = embeddings.embed_query(query)
+        import numpy as np
+
+        def cosine(a, b):
+            a = np.array(a, dtype=float)
+            b = np.array(b, dtype=float)
+            denom = (np.linalg.norm(a) * np.linalg.norm(b)) or 1.0
+            return float(np.dot(a, b) / denom)
+
+        scored = []
+        for d in all_docs:
+            try:
+                d_vec = embeddings.embed_query(d.page_content[:512])
+                scored.append((cosine(q_vec, d_vec), d))
+            except Exception:
+                scored.append((0.0, d))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = [d for _, d in scored[:k]]
+    except Exception as e:
+        logger.warning(f"Attached-file ranking failed, falling back: {e}")
+        top = all_docs[:k]
+
+    # Guarantee the last 2 chunks (current status) are present.
+    tail = sorted(all_docs, key=lambda d: int(d.metadata.get('chunk_index', 0)))[-2:]
+    seen = {_chunk_key(d.page_content) for d in top}
+    for t in tail:
+        if _chunk_key(t.page_content) not in seen:
+            top.append(t)
+            seen.add(_chunk_key(t.page_content))
+    return top
 
 
 def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
@@ -426,8 +533,13 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                         LCDoc(page_content=doc, metadata=meta)
                         for doc, meta in zip(all_chunks['documents'], all_chunks['metadatas'])
                     ]
-                    logger.info(f"File attached — returning ALL {len(all_docs)} chunks")
-                    return all_docs
+                    # FIX 9: rank instead of returning everything raw.
+                    ranked = _rank_attached_file_chunks(query, all_docs, max(k, MAX_DOC_CHUNKS_NORMAL))
+                    logger.info(
+                        f"File attached — {len(all_docs)} total chunks, "
+                        f"returning {len(ranked)} ranked chunks"
+                    )
+                    return ranked
             except Exception as e:
                 logger.warning(f"Full file retrieval error: {e}")
             results = vs.max_marginal_relevance_search(
@@ -447,7 +559,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
             query, k=k, fetch_k=k*4, lambda_mult=0.5)
 
         if well_num:
-            # Normalise the requested well number (strip leading zeros)
             target_wnum = str(well_num).lstrip('0') or '0'
             well_results = []
             dgh_results = []
@@ -457,7 +568,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
             for r in main_results:
                 chunk_well = r.metadata.get('well_num', '')
                 chunk_file = r.metadata.get('filename', '')
-                # FIX 2: Use strict equality helper
                 if _well_num_matches(chunk_well, target_wnum):
                     well_results.append(r)
                 elif chunk_file == DGH_FILENAME:
@@ -471,17 +581,18 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                     where={"filename": DGH_FILENAME},
                     include=['documents', 'metadatas']
                 )
-                existing_keys = {r.page_content[:80] for r in dgh_results}
+                # FIX 7: dedup on full-content hash, not on a 80-char prefix.
+                existing_keys = {_chunk_key(r.page_content) for r in dgh_results}
                 from langchain.schema import Document as LCDoc
                 import re as _re
                 well_pattern = _re.compile(
                     rf'(?:EZZAOUIA|EZZ)\s*#?\s*0*{re.escape(target_wnum)}\b', _re.IGNORECASE)
                 for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas']):
-                    if doc[:80] in existing_keys:
+                    if _chunk_key(doc) in existing_keys:
                         continue
                     if well_pattern.search(doc):
                         dgh_results.append(LCDoc(page_content=doc, metadata=meta))
-                        existing_keys.add(doc[:80])
+                        existing_keys.add(_chunk_key(doc))
                 logger.info(f"DGH keyword fetch: {len(dgh_results)} total DGH chunks")
             except Exception as e:
                 logger.warning(f"DGH extra fetch error: {e}")
@@ -492,11 +603,11 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                         where={"filename": DGH_FILENAME},
                         include=['documents', 'metadatas']
                     )
-                    existing_keys = {r.page_content[:80] for r in dgh_results}
+                    existing_keys = {_chunk_key(r.page_content) for r in dgh_results}
                     for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas']):
-                        if doc[:80] not in existing_keys:
+                        if _chunk_key(doc) not in existing_keys:
                             dgh_results.append(LCDoc(page_content=doc, metadata=meta))
-                            existing_keys.add(doc[:80])
+                            existing_keys.add(_chunk_key(doc))
                     logger.info(f"Small file — all {len(dgh_results)} DGH chunks included")
                 except Exception as e:
                     logger.warning(f"Small file fetch error: {e}")
@@ -516,13 +627,13 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                         where={"filename": DGH_FILENAME},
                         include=['documents', 'metadatas']
                     )
-                    existing_keys = {r.page_content[:80] for r in dgh_results}
+                    existing_keys = {_chunk_key(r.page_content) for r in dgh_results}
                     for doc, meta in zip(all_well_chunks['documents'], all_well_chunks['metadatas']):
                         doc_lower = doc.lower()
                         if any(kw in doc_lower for kw in TECHNICAL_KEYWORDS):
-                            if doc[:80] not in existing_keys:
+                            if _chunk_key(doc) not in existing_keys:
                                 dgh_results.append(LCDoc(page_content=doc, metadata=meta))
-                                existing_keys.add(doc[:80])
+                                existing_keys.add(_chunk_key(doc))
                     logger.info(f"Keyword fallback added chunks, total DGH: {len(dgh_results)}")
                 except Exception as e:
                     logger.warning(f"Keyword fallback error: {e}")
@@ -544,7 +655,7 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                     score = 0
                     content = r.page_content.lower()
                     if target_year and target_year in r.page_content:
-                        score += 10
+                        score += 50
                     if any(kw in content for kw in PRIORITY_KEYWORDS):
                         score += 5
                     return score
@@ -590,10 +701,11 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
 
                 if dgh_docs:
                     combined = main_results + dgh_docs
+                    # FIX 7: dedup on full-content hash.
                     seen = set()
                     deduped = []
                     for r in combined:
-                        key = r.page_content[:100]
+                        key = _chunk_key(r.page_content)
                         if key not in seen:
                             seen.add(key)
                             deduped.append(r)
@@ -1147,6 +1259,24 @@ def _is_well_year_trend_request(question):
     return has_well and has_year and has_trend_word and has_metric_word
 
 
+# FIX 14: distinguish "current status" questions from historical/workover questions.
+#          The tail-chunk force-inject (last 2 chunks = most recent operation result)
+#          helps current-status answers but sabotages historical questions by placing
+#          the RESULT of an operation before its OBJECTIVE in the context.
+def _is_current_status_question(question):
+    if not question:
+        return False
+    q = question.lower()
+    status_terms = [
+        'current status', 'statut actuel', 'statut courant',
+        'actuellement', 'currently', 'now', 'maintenant',
+        'latest', 'most recent', 'dernier statut', "aujourd",
+        'still producing', 'still active', 'toujours', '\u00e9tat actuel',
+        'present condition', 'condition actuelle',
+    ]
+    return any(t in q for t in status_terms)
+
+
 def _localized_trend_word(direction, lang):
     labels = {
         'fr': {'up': 'En hausse', 'down': 'En baisse', 'flat': 'Stable'},
@@ -1584,7 +1714,7 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
 
 def _build_well_confusion_rule(well_ref):
     """
-    FIX 4: Build a dynamic well confusion guard for PROMPT_DOCUMENT_QA.
+    Build a dynamic well confusion guard for PROMPT_DOCUMENT_QA.
     Prevents the LLM from mixing up EZZ1/EZZ11 or any adjacent well numbers.
     Returns an empty string when no guard is needed.
     """
@@ -1594,7 +1724,6 @@ def _build_well_confusion_rule(well_ref):
     if not wnum:
         return ""
     n = wnum.group().lstrip('0') or '0'
-    # Build a list of similar-looking well numbers that could be confused
     similar = []
     if n == '1':
         similar = ['11']
@@ -1604,13 +1733,12 @@ def _build_well_confusion_rule(well_ref):
         similar = ['12']
     elif n == '12':
         similar = ['2']
-    # Add generic single-digit / double-digit confusion pairs
     if len(n) == 1:
-        similar.append(f"1{n}")  # e.g. EZZ3 → EZZ13
+        similar.append(f"1{n}")
     elif len(n) == 2 and n.startswith('1'):
-        similar.append(n[1])     # e.g. EZZ13 → EZZ3
+        similar.append(n[1])
 
-    similar = list(set(similar))  # deduplicate
+    similar = list(set(similar))
 
     if not similar:
         rule = (
@@ -1735,7 +1863,10 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         )
 
         if is_doc_priority:
-            retrieval_k = 20
+    # If question has a specific year, fetch more chunks to find year-specific content
+            import re as _re_year
+            year_in_q = _re_year.search(r'\b(20\d{2})\b', q_lower)
+            retrieval_k = 30 if year_in_q else 20
         elif is_doc_only_question:
             retrieval_k = 15
         else:
@@ -1763,12 +1894,9 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             if num:
                 detected_well_num = num.group()
 
-        # For field-wide questions, ignore attached file and search globally
         effective_doc_id = None if is_field_wide_doc else doc_id
         effective_filename = None if is_field_wide_doc else filename
 
-        # For field-wide questions, skip the initial retrieval entirely
-        # The is_field_wide_doc block will build its own per-well context
         if is_field_wide_doc:
             doc_results = []
             logger.info("Field-wide question — skipping initial retrieval")
@@ -1791,8 +1919,12 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     LCDoc(page_content=doc, metadata=meta)
                     for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas'])
                 ]
-                existing = {r.page_content[:80] for r in doc_results}
-                doc_results = forced + [r for r in doc_results if r.page_content[:80] not in {d.page_content[:80] for d in forced}]
+                # FIX 7: dedup on full-content hash.
+                forced_keys = {_chunk_key(d.page_content) for d in forced}
+                doc_results = forced + [
+                    r for r in doc_results
+                    if _chunk_key(r.page_content) not in forced_keys
+                ]
                 logger.info(f"Workover forced: all {len(forced)} chunks from {DGH_FILE}")
 
         tcm_match = re.search(r'\b(?:from\s+)?(tcm|ocm)\s*#?\s*(\d+)\b', q_lower)
@@ -1819,13 +1951,14 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             col = vs._collection
             from langchain.schema import Document as LCDoc
             year_boosted = []
-            existing_keys = {r.page_content[:80] for r in doc_results}
+            # FIX 7: dedup on full-content hash.
+            existing_keys = {_chunk_key(r.page_content) for r in doc_results}
             all_meta = col.get(include=['metadatas', 'documents'])
             for doc, meta in zip(all_meta['documents'], all_meta['metadatas']):
                 if target_yr in doc:
-                    if doc[:80] not in existing_keys:
+                    if _chunk_key(doc) not in existing_keys:
                         year_boosted.append(LCDoc(page_content=doc, metadata=meta))
-                        existing_keys.add(doc[:80])
+                        existing_keys.add(_chunk_key(doc))
             if year_boosted:
                 doc_results = year_boosted[:8] + doc_results
                 logger.info(f"Year {target_yr} boosted: {len(year_boosted)} chunks added")
@@ -1838,8 +1971,11 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             logger.info(f"  Chunk {i+1}: [{r.metadata.get('filename','?')}] {r.page_content[:150]}")
 
         if doc_id and doc_results:
-            combined = " ".join(d.page_content for d in doc_results[:3])
-            if not is_petroleum_document(combined):
+            # FIX 12: validate on a wider sample (up to 10 chunks) instead of
+            #         just the first 3. A valid PDF whose first chunks are a
+            #         cover page / table of contents was being fully rejected.
+            sample = " ".join(d.page_content for d in doc_results[:10])
+            if not is_petroleum_document(sample):
                 return {
                     'answer': 'Ce document ne semble pas lié au secteur pétrolier ou à MARETAP. Veuillez joindre un document technique pétrolier (rapport de production, étude réservoir, rapport workover, etc.).',
                     'chart_data': None,
@@ -1865,7 +2001,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 score = 0
                 content = d.page_content.lower()
                 if target_year and target_year in d.page_content:
-                    score += 20
+                    score += 50
                 if any(t in content for t in PRIORITY_TERMS):
                     score += 5
                 return score
@@ -1878,7 +2014,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                                 if d.metadata.get('filename') != expected_file]
 
                 if well_chunks:
-                    # Define high-value keywords for tubing integrity questions
                     HIGH_VALUE_TERMS = [
                         'integrity', 'rejected', 'leak', 'failure', 'workover',
                         'lost thickness', 'sucker rod', 'wash out', 'casing',
@@ -1903,28 +2038,24 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                         'mf : 0437877x', 'contact@maretap'
                     ]
 
-                    # Separate high-value from low-value chunks
                     high_value = []
                     low_value = []
                     for c in well_chunks:
                         content = c.page_content.lower()
-                        # Only skip if chunk is mostly header (< 100 chars of real content)
                         non_header_content = content
                         for skip in SKIP_TERMS:
                             non_header_content = non_header_content.replace(skip, '')
                         if len(non_header_content.strip()) < 10:
-                            continue  # Skip chunks that are ONLY headers
+                            continue
                         if any(term in content for term in HIGH_VALUE_TERMS):
                             high_value.append(c)
                         else:
                             low_value.append(c)
 
-                    # Sort each group by chunk_index (chronological order)
                     all_high_sorted = sorted(
                         high_value,
                         key=lambda d: int(d.metadata.get('chunk_index', 0))
                     )
-                    # Put last 5 chunks first (most likely to contain current status)
                     if len(all_high_sorted) > 5:
                         late_chunks = all_high_sorted[-5:]
                         early_chunks = all_high_sorted[:-5]
@@ -1937,13 +2068,12 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                         key=lambda d: int(d.metadata.get('chunk_index', 0))
                     )
 
-                    # For single-well questions: use ONLY chunks from this well's file
-                    # Never include chunks from other wells
                     sorted_results = high_value_ordered + low_value_ordered[:5]
 
-                    # Force-inject last 2 chunks by querying ChromaDB directly
-                    # (well_chunks only contains the k=20 retrieved chunks — chunk 41
-                    #  may score low semantically and never appear in doc_results)
+                    # FIX 13: force-inject last 2 chunks, but dedup by full-content
+                    #         hash so they do not silently push relevant chunks
+                    #         out of the budget. The hard cap below keeps the list
+                    #         bounded.
                     try:
                         from langchain.schema import Document as LCDoc
                         _vs = get_global_vectorstore()
@@ -1959,18 +2089,31 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                                 key=lambda d: int(d.metadata.get('chunk_index', 0))
                             )
                             logger.info(f"ChromaDB direct: {len(_all_chunks)} total chunks in {expected_file}")
-                            # Always force last 2 chunks to position 0
-                            # Remove any existing occurrence first, then prepend
+                            # FIX 14: inject tail chunks at position 0 ONLY for
+                            #          current-status questions. For historical/
+                            #          workover questions, append to end so the
+                            #          objective chunk (earlier chunk_index) is
+                            #          read before the result by the LLM.
+                            _inject_tail_first = _is_current_status_question(question)
+                            logger.info(
+                                f"Tail-chunk injection mode: "
+                                f"{'FRONT (status question)' if _inject_tail_first else 'BACK (historical question)'}"
+                            )
                             for _tail_chunk in reversed(_all_chunks[-2:]):
+                                _tail_key = _chunk_key(_tail_chunk.page_content)
                                 sorted_results = [
                                     d for d in sorted_results
-                                    if d.page_content[:50] != _tail_chunk.page_content[:50]
+                                    if _chunk_key(d.page_content) != _tail_key
                                 ]
-                                sorted_results = [_tail_chunk] + sorted_results
+                                if _inject_tail_first:
+                                    sorted_results = [_tail_chunk] + sorted_results
+                                else:
+                                    sorted_results = sorted_results + [_tail_chunk]
                                 logger.info(
                                     f"Force-injected chunk index "
                                     f"{_tail_chunk.metadata.get('chunk_index')} "
-                                    f"at position 0 from {expected_file}"
+                                    f"at position {'0 (front)' if _inject_tail_first else 'end (back)'}"
+                                    f" from {expected_file}"
                                 )
                     except Exception as _e:
                         logger.warning(f"Force-inject failed: {_e}")
@@ -1983,11 +2126,40 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             else:
                 sorted_results = sorted(doc_results, key=doc_chunk_score, reverse=True)
 
-            # Build doc_context preserving sorted_results order
-            # (dict grouping was destroying the Force-inject ordering)
+            # FIX 10: hard cap on the NUMBER of chunks after relevance sorting.
+            #         This makes the char-based truncation a rare safety net
+            #         rather than the primary (blind) cut.
+            chunk_cap = MAX_DOC_CHUNKS_FIELD if is_field_wide_doc else MAX_DOC_CHUNKS_NORMAL
+            if len(sorted_results) > chunk_cap:
+                logger.info(
+                    f"Chunk cap applied: {len(sorted_results)} -> {chunk_cap} chunks"
+                )
+                sorted_results = sorted_results[:chunk_cap]
+
+            # FIX 15: for historical/year-specific questions, bring chunks that
+            #          mention the target year to the front in chunk_index order
+            #          so the LLM reads OBJECTIVE → EXECUTION → RESULT (not reversed).
+            #          Skip when it is a current-status question — tail chunks are
+            #          already at position 0 and must stay there.
+            if target_year and not _is_current_status_question(question):
+                _year_chunks = [d for d in sorted_results if target_year in d.page_content]
+                _rest_chunks = [d for d in sorted_results if target_year not in d.page_content]
+                if _year_chunks:
+                    _year_chunks = sorted(
+                        _year_chunks,
+                        key=lambda d: int(d.metadata.get('chunk_index', 0))
+                    )
+                    sorted_results = _year_chunks + _rest_chunks
+                    logger.info(
+                        f"Year-{target_year} ordering: {len(_year_chunks)} "
+                        f"chunks moved to front in chunk_index order"
+                    )
+
+            # FIX 1: each chunk is now kept up to CHUNK_CONTENT_CHARS (1800)
+            #        instead of 600. We index up to 2000-char chunks, so 600
+            #        discarded ~70% of every chunk's content.
             for d in sorted_results:
                 src = d.metadata.get('filename', 'Document')
-                # Remove header noise to expose actual content
                 import re as _re3
                 _content = d.page_content
                 _content = _re3.sub(
@@ -1995,7 +2167,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     '', _content, flags=_re3.IGNORECASE
                 )
                 _content = _re3.sub(r'\n{3,}', '\n', _content)
-                _cleaned = ' '.join(_content.split())[:600]
+                _cleaned = ' '.join(_content.split())[:CHUNK_CONTENT_CHARS]
                 doc_context += f"\n--- Source: {src} ---\n"
                 doc_context += _cleaned + "\n---\n"
 
@@ -2007,7 +2179,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             (r'circulation loss.{0,150}', 'DRILLING ISSUE'),
         ]
         highlights = []
-        # Only highlight from the requested well's file
         well_docs_for_highlight = [d for d in doc_results
                                    if d.metadata.get('filename') == f"DGH_EZZ{detected_well_num}.pdf"] if detected_well_num else doc_results
         for d in well_docs_for_highlight:
@@ -2163,7 +2334,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             for wnum in ALL_WELL_NUMS:
                 well_query = f"EZZAOUIA#{wnum} EZZ{wnum} EZZ-{wnum} EZZ #{wnum} {specific_query_suffix}"
 
-                # Try tagged retrieval first
                 results = retrieve_smart(query=well_query, k=15, well_num=wnum)
 
                 per_well_context += f"\n=== WELL EZZ-{wnum.zfill(2)} START ===\n"
@@ -2175,20 +2345,17 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                         _re.IGNORECASE
                     )
 
-                    # Skip useless header/footer chunks
                     SKIP_TERMS = [
                         'mail address', 'immeuble monia', 'tél :', 'fax :',
                         '--- page', 'les berges du lac', 'rc : b116521996',
                         'mf : 0437877x', 'contact@maretap'
                     ]
 
-                    # Step 1: Remove header/footer chunks
                     filtered = [
                         r for r in results
                         if not any(skip in r.page_content.lower() for skip in SKIP_TERMS)
                     ]
 
-                    # Step 2: Score remaining chunks by topic relevance
                     def score_chunk(r):
                         content = r.page_content.lower()
                         score = 0
@@ -2200,20 +2367,22 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
                     filtered_scored = sorted(filtered, key=score_chunk, reverse=True)
 
-                    # Step 3: Take top 3 most relevant chunks
-                    top_chunks = filtered_scored[:3] if filtered_scored else results[:2]
+                    # FIX 5: 4 chunks of 1200 chars per well (was 3 chunks × 600).
+                    top_chunks = (filtered_scored[:FIELD_WIDE_CHUNKS_PER_WELL]
+                                  if filtered_scored else results[:2])
 
                     for r in top_chunks:
-                        # Prefix every chunk with its well label
-                        per_well_context += f"[EZZ-{wnum.zfill(2)} DATA] " + r.page_content[:600] + "\n---\n"
+                        per_well_context += (
+                            f"[EZZ-{wnum.zfill(2)} DATA] "
+                            + r.page_content[:FIELD_WIDE_CHARS_PER_CHUNK]
+                            + "\n---\n"
+                        )
                     per_well_context += f"=== WELL EZZ-{wnum.zfill(2)} END ===\n"
                 else:
                     per_well_context += f"  No document chunks found.\n=== WELL EZZ-{wnum.zfill(2)} END ===\n"
 
             doc_context = per_well_context
             logger.info(f"Field-wide RAG done: {len(ALL_WELL_NUMS)} wells processed")
-
-            
 
         sql_has_data = bool(sql_context and len(sql_context.strip()) > 50)
         production_keywords = [
@@ -2277,19 +2446,41 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 "Ne jamais basculer vers l'anglais ou l'arabe."
             )
 
-        # Field-wide questions need more context (17 wells × chunks)
-        MAX_DOC_CONTEXT_CHARS = 32000 if is_field_wide_doc else 28000
+        # FIX 3: doc context budget kept below num_ctx (16384 tokens). The
+        #        previous 28000/32000 chars, added to the system prompt + SQL +
+        #        comments, could overflow the context window and make Ollama
+        #        silently truncate the START of the prompt (system rules).
+        MAX_DOC_CONTEXT_CHARS = (
+            MAX_DOC_CONTEXT_CHARS_FIELD if is_field_wide_doc
+            else MAX_DOC_CONTEXT_CHARS_NORMAL
+        )
+        doc_context_len_before = len(doc_context)
         if len(doc_context) > MAX_DOC_CONTEXT_CHARS:
             doc_context = doc_context[:MAX_DOC_CONTEXT_CHARS] + "\n[... context truncated for length ...]"
-            logger.info(f"Doc context truncated to {MAX_DOC_CONTEXT_CHARS} chars")
+            logger.warning(
+                f"Doc context truncated: {doc_context_len_before} -> "
+                f"{MAX_DOC_CONTEXT_CHARS} chars. Some retrieved content was "
+                f"dropped — answer may be partial."
+            )
 
-        MAX_SQL_CONTEXT_CHARS = 1000
+        # FIX 8: SQL context budget raised to 6000 chars. The previous 1000-char
+        #        cut left the LLM with ~6 of 20 wells in a ranking.
+        sql_context_len_before = len(sql_context)
         if len(sql_context) > MAX_SQL_CONTEXT_CHARS:
             sql_context = sql_context[:MAX_SQL_CONTEXT_CHARS] + "\n[... sql context truncated ...]"
+            logger.warning(
+                f"SQL context truncated: {sql_context_len_before} -> "
+                f"{MAX_SQL_CONTEXT_CHARS} chars."
+            )
 
-        logger.info(f"FINAL CONTEXT IN PROMPT - DOC: {len(doc_context)} chars, SQL: {len(sql_context)} chars")
+        logger.info(
+            f"FINAL CONTEXT IN PROMPT — DOC: {len(doc_context)} chars "
+            f"(before trunc: {doc_context_len_before}), "
+            f"SQL: {len(sql_context)} chars "
+            f"(before trunc: {sql_context_len_before}), "
+            f"COMMENTS: {len(comments_context)} chars"
+        )
 
-        # FIX 4: Build the dynamic well confusion rule and inject it into PROMPT_DOCUMENT_QA
         well_confusion_rule = _build_well_confusion_rule(well_ref)
 
         task_prompts = {
@@ -2343,6 +2534,7 @@ ANSWER:"""
                     'suggestions': generate_suggestions(question, well=well, lang=lang),
                 }
 
+        logger.info(f"PROMPT TOTAL LENGTH: {len(prompt)} chars")
         logger.info(f"PROMPT FIRST 500: {prompt[:500]}")
         logger.info(f"DOC CONTEXT SAMPLE: {doc_context[:300]}")
         logger.info(f"PROMPT LAST 500: {prompt[-500:]}")
@@ -2351,9 +2543,18 @@ ANSWER:"""
             answer = response.strip()
         except Exception as llm_error:
             logger.error(f"LLM invoke error: {llm_error}")
-            if 'context' in str(llm_error).lower() or len(prompt) > 40000:
-                logger.warning("Prompt too large — retrying with reduced context")
-                doc_context_short = doc_context[:8000] + "\n[... context reduced due to size ...]"
+            # FIX 4: the degraded retry now keeps far more context (12000 vs
+            #        8000 chars) AND logs a VISIBLE warning so a silently
+            #        partial answer is no longer invisible in the logs.
+            if 'context' in str(llm_error).lower() or len(prompt) > 45000:
+                logger.warning(
+                    "Prompt too large — retrying with REDUCED context. "
+                    "The answer for this question will be PARTIAL."
+                )
+                doc_context_short = (
+                    doc_context[:RETRY_DOC_CONTEXT_CHARS]
+                    + "\n[... context reduced due to size — answer may be incomplete ...]"
+                )
                 prompt_short = prompt.replace(doc_context, doc_context_short)
                 response = get_llm().invoke(prompt_short)
                 answer = response.strip()
@@ -2363,6 +2564,17 @@ ANSWER:"""
             answer = _force_english_month_names(answer)
         answer = _sanitize_answer_language(answer, lang)
         logger.info(f"Response generated: {len(answer)} chars")
+
+        # FIX 2 (detection): if the answer ends without sentence-ending
+        #        punctuation and is suspiciously short relative to the context,
+        #        log it so truncated generations are visible.
+        if answer and len(answer) > 50:
+            last_char = answer.rstrip()[-1]
+            if last_char not in '.!?:|)】»"\'`' and not answer.rstrip().endswith('---'):
+                logger.warning(
+                    f"Answer may be TRUNCATED — ends with '{last_char}' "
+                    f"(no sentence terminator). Length: {len(answer)} chars."
+                )
 
         well = normalize_well_code(question)
         chart_data = build_chart_data(question) if detect_chart_request(question) else None

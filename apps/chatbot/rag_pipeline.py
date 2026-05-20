@@ -3,6 +3,7 @@ import re
 import hashlib
 import datetime
 import calendar
+from collections import Counter  # FIX: was missing — caused NameError crash in _other_year_dominates
 from django.conf import settings
 from langchain_ollama import OllamaLLM
 from langchain_community.embeddings import SentenceTransformerEmbeddings
@@ -15,44 +16,15 @@ logger = logging.getLogger('apps')
 TODAY = datetime.date.today().strftime('%d/%m/%Y')
 
 # ============================================================================
-# TUNING CONSTANTS — centralised so they are easy to adjust and reason about.
-#
-# num_ctx = 16384 tokens. A rough rule of thumb is ~3.3 chars per token, so
-# the FULL prompt budget is roughly 50,000 chars. We must reserve room for:
-#   - the system prompt (PROMPT_*)         ~2,500-3,500 chars
-#   - the SQL context                      up to 6,000 chars
-#   - the operator comments                up to ~3,000 chars
-#   - the conversation history             ~500 chars
-#   - the model's OWN generated answer     ~7,000 chars (2048 tokens)
-# That leaves roughly 18,000-24,000 chars for the document context.
+# TUNING CONSTANTS
 # ============================================================================
-
-# FIX 1: chunk content is no longer cut at 600 chars. We index up to 2000-char
-#        chunks, so cutting at 600 threw away ~70% of every chunk. 1800 keeps
-#        almost the whole chunk while leaving a small safety margin.
 CHUNK_CONTENT_CHARS = 1800
-
-# FIX 3: doc context budget kept BELOW num_ctx so Ollama never silently
-#        truncates the START of the prompt (system instructions / first chunks).
 MAX_DOC_CONTEXT_CHARS_NORMAL = 18000
 MAX_DOC_CONTEXT_CHARS_FIELD = 24000
-
-# FIX 8: SQL context is no longer cut at 1000 chars. A field analysis emits a
-#        field summary + 20-well ranking + reservoir block — easily 4-5k chars.
-#        Cutting at 1000 left the LLM with ~6 wells out of 20.
 MAX_SQL_CONTEXT_CHARS = 6000
-
-# FIX 4: degraded retry now keeps far more context (and logs a visible warning).
 RETRY_DOC_CONTEXT_CHARS = 12000
-
-# FIX 10: hard cap on the NUMBER of doc chunks AFTER relevance sorting, so the
-#         char-based truncation almost never fires and never cuts well-ranked
-#         chunks blindly.
 MAX_DOC_CHUNKS_NORMAL = 18
 MAX_DOC_CHUNKS_FIELD = 60
-
-# FIX 5: field-wide questions now use 4 chunks of 1200 chars per well
-#        (instead of 3 chunks of 600).
 FIELD_WIDE_CHUNKS_PER_WELL = 4
 FIELD_WIDE_CHARS_PER_CHUNK = 1200
 
@@ -131,8 +103,6 @@ RULES:
 - Respond in same language as the question
 """
 
-# FIX 4 (original numbering): PROMPT_DOCUMENT_QA no longer hardcodes EZZ1 vs EZZ11.
-# The well confusion rule is injected dynamically in ask() via {well_confusion_rule}.
 PROMPT_DOCUMENT_QA = """You are Dr. EZZAOUIA, Senior Petroleum Engineer at MARETAP S.A.
 Your task: Answer questions by extracting information from the provided documents.
 
@@ -171,16 +141,19 @@ RULES:
   * BOLD critical findings: **rejected joints**, **tubing leak**, **integrity failure**
 - For workover history: create ONE row per workover year, summarizing the purpose
 - NEVER list individual drilling steps — only summarize the campaign objective and result
+- The DOCUMENT CONTEXT may contain SEVERAL workovers from different
+  years (e.g. 2010, 2013, 2015, 2017) using identical technical
+  vocabulary. Before answering, identify every year present and use
+  ONLY the passages whose year matches the question. Ignore workovers
+  from other years even if they look relevant.
 - For a workover OBJECTIVE or PURPOSE question:
   * The objective is stated at the START of the workover description
-    (e.g. "Pull existing completion", "Replace tubing due to...",
-    "due to confirmed hole in tubing").
+    (e.g. "Pull existing completion", "due to confirmed hole in tubing").
   * The packer setting depth, rig release date, and final completion
-    depths are the RESULT of the workover, NOT its objective. NEVER
-    report a final packer depth or a rig release date as the goal.
-  * Read the workover section from its very first line — the REASON
-    for the intervention always comes before the execution steps and
-    the final result.
+    depths are the RESULT, NOT the objective. NEVER report a final
+    packer depth or a rig release date as the goal of the workover.
+  * Read the workover block from its first line — the reason for the
+    intervention always precedes the execution steps and the result.
 - Extract facts directly: dates, causes, actions, results
 - BOLD key facts: **58 tubing joints rejected**, **April 24th, 2015**
 - Always cite which document the answer comes from
@@ -308,16 +281,6 @@ _global_vectorstore = None
 
 
 def get_llm():
-    """
-    FIX 2:  num_predict was -2 (= 'fill remaining context'). On CPU with
-            llama3.1:8b this makes generation extremely slow, and when the
-            timeout was hit the answer was cut mid-sentence. We now use a
-            firm cap (2048 tokens) and a longer timeout (300s).
-    FIX 11: repeat_penalty lowered from 1.15 to 1.08. A high penalty pushes
-            the model toward the EOS token early inside markdown tables
-            (where 'STB/j', well names, '✅' legitimately repeat), cutting
-            tables mid-way.
-    """
     global _llm
     if _llm is None:
         _llm = OllamaLLM(
@@ -325,10 +288,10 @@ def get_llm():
             base_url=settings.OLLAMA_BASE_URL,
             temperature=0.05,
             num_ctx=16384,
-            num_predict=2048,      # FIX 2: firm cap instead of -2
+            num_predict=4096,
             top_p=0.85,
-            repeat_penalty=1.08,   # FIX 11: lowered from 1.15
-            timeout=300,           # FIX 2: raised from 180s
+            repeat_penalty=1.08,
+            timeout=300,
         )
     return _llm
 
@@ -370,22 +333,10 @@ def get_global_vectorstore():
 
 
 def _chunk_key(chunk_text):
-    """
-    FIX 7: deduplication helper. Previously chunks were deduplicated on their
-           first 80-100 chars. Two distinct chunks that share a repeated PDF
-           header ('DGH EZZAOUIA#11 — Well History — Page X ...') were treated
-           as duplicates and the SECOND (containing different information) was
-           thrown away. We now hash the FULL chunk content.
-    """
     return hashlib.md5((chunk_text or "").encode('utf-8')).hexdigest()
 
 
 def _extract_well_num_from_chunk(chunk):
-    """
-    FIX 2 (original numbering): Robust well number extraction that avoids EZZ1
-    matching EZZ11. Matches the LONGEST number at a word boundary to prevent
-    prefix collisions. E.g. 'EZZAOUIA#11' returns '11', not '1'.
-    """
     import re as _re
     matches = list(_re.finditer(
         r'(?:EZZ|EZZAOUIA)\s*#?\s*0*(\d{1,2})(?!\d)',
@@ -393,7 +344,6 @@ def _extract_well_num_from_chunk(chunk):
     ))
     if not matches:
         return None
-    from collections import Counter
     nums = [m.group(1).lstrip('0') or '0' for m in matches]
     most_common = Counter(nums).most_common(1)[0][0]
     return most_common
@@ -465,22 +415,12 @@ def index_document(text, metadata=None, doc_id=None):
 
 
 def _well_num_matches(chunk_well, target_well):
-    """Strict equality check that prevents '1' matching '11' or vice versa."""
     if not chunk_well or not target_well:
         return False
     return chunk_well.lstrip('0') == target_well.lstrip('0')
 
 
 def _rank_attached_file_chunks(query, all_docs, k):
-    """
-    FIX 9: when a file is attached, the previous code returned ALL chunks raw.
-           On a large DGH PDF that is 60-100 chunks; after per-chunk truncation
-           and the global char cap, the SECOND HALF of the document never
-           reached the LLM — and that is exactly where the 'current status'
-           sits. We now rank the chunks by relevance and keep the most useful
-           ones, but we ALSO guarantee the last 2 chunks (current status) are
-           included.
-    """
     if len(all_docs) <= k:
         return all_docs
 
@@ -508,7 +448,6 @@ def _rank_attached_file_chunks(query, all_docs, k):
         logger.warning(f"Attached-file ranking failed, falling back: {e}")
         top = all_docs[:k]
 
-    # Guarantee the last 2 chunks (current status) are present.
     tail = sorted(all_docs, key=lambda d: int(d.metadata.get('chunk_index', 0)))[-2:]
     seen = {_chunk_key(d.page_content) for d in top}
     for t in tail:
@@ -533,7 +472,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                         LCDoc(page_content=doc, metadata=meta)
                         for doc, meta in zip(all_chunks['documents'], all_chunks['metadatas'])
                     ]
-                    # FIX 9: rank instead of returning everything raw.
                     ranked = _rank_attached_file_chunks(query, all_docs, max(k, MAX_DOC_CHUNKS_NORMAL))
                     logger.info(
                         f"File attached — {len(all_docs)} total chunks, "
@@ -581,7 +519,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
                     where={"filename": DGH_FILENAME},
                     include=['documents', 'metadatas']
                 )
-                # FIX 7: dedup on full-content hash, not on a 80-char prefix.
                 existing_keys = {_chunk_key(r.page_content) for r in dgh_results}
                 from langchain.schema import Document as LCDoc
                 import re as _re
@@ -653,10 +590,20 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
 
                 def chunk_score(r):
                     score = 0
-                    content = r.page_content.lower()
-                    if target_year and target_year in r.page_content:
+                    content = r.page_content
+                    content_lower = content.lower()
+
+                    if target_year and target_year in content:
                         score += 50
-                    if any(kw in content for kw in PRIORITY_KEYWORDS):
+
+                    # FIX: penalise chunks where wrong year is majority
+                    if target_year:
+                        all_years = re.findall(r'\b((?:19|20)\d{2})\b', content)
+                        other_years = [y for y in all_years if y != str(target_year)]
+                        if all_years and len(other_years) > len(all_years) // 2:
+                            score -= 20
+
+                    if any(kw in content_lower for kw in PRIORITY_KEYWORDS):
                         score += 5
                     return score
 
@@ -701,7 +648,6 @@ def retrieve_smart(query, doc_id=None, filename=None, k=6, well_num=None):
 
                 if dgh_docs:
                     combined = main_results + dgh_docs
-                    # FIX 7: dedup on full-content hash.
                     seen = set()
                     deduped = []
                     for r in combined:
@@ -786,7 +732,9 @@ def search_date_comments(keyword: str = None, well_code: str = None,
                     )
                     params.append(f"%EZZ#{n}[^0-9]%")
                     params.append(f"%EZZ# {n}[^0-9]%")
-                    params.append(f"%EZZ#{n}")
+                    # FIX: added trailing % so it matches even when well code
+                    # is not at the very end of the comments string
+                    params.append(f"%EZZ#{n}%")
                 else:
                     conditions.append("comments LIKE %s")
                     params.append(f"%{well_code}%")
@@ -825,7 +773,8 @@ def search_date_comments_multi(keywords: list, well_code: str = None,
                     )
                     params.append(f"%EZZ#{n}[^0-9]%")
                     params.append(f"%EZZ# {n}[^0-9]%")
-                    params.append(f"%EZZ#{n}")
+                    # FIX: added trailing % (same fix as search_date_comments)
+                    params.append(f"%EZZ#{n}%")
                 else:
                     conditions.append("comments LIKE %s")
                     params.append(f"%{well_code}%")
@@ -1040,6 +989,11 @@ Avg production hours : {avg_prodhours:.1f} h/j  {'[CRITICAL — wells not at ful
                 f"| {'SHUT-IN' if w.closed == 'Y' else 'ACTIVE ':7} "
                 f"| Layer: {w.layer}\n"
             )
+
+    # FIX: guard against SQL context overflow
+    if len(context) > MAX_SQL_CONTEXT_CHARS:
+        logger.warning(f"SQL context pre-truncated: {len(context)} -> {MAX_SQL_CONTEXT_CHARS}")
+        context = context[:MAX_SQL_CONTEXT_CHARS] + "\n[... truncated ...]"
 
     return context
 
@@ -1259,10 +1213,6 @@ def _is_well_year_trend_request(question):
     return has_well and has_year and has_trend_word and has_metric_word
 
 
-# FIX 14: distinguish "current status" questions from historical/workover questions.
-#          The tail-chunk force-inject (last 2 chunks = most recent operation result)
-#          helps current-status answers but sabotages historical questions by placing
-#          the RESULT of an operation before its OBJECTIVE in the context.
 def _is_current_status_question(question):
     if not question:
         return False
@@ -1270,11 +1220,185 @@ def _is_current_status_question(question):
     status_terms = [
         'current status', 'statut actuel', 'statut courant',
         'actuellement', 'currently', 'now', 'maintenant',
-        'latest', 'most recent', 'dernier statut', "aujourd",
+        'latest status', 'latest', 'most recent', 'dernier statut', "aujourd",
         'still producing', 'still active', 'toujours', '\u00e9tat actuel',
         'present condition', 'condition actuelle',
     ]
     return any(t in q for t in status_terms)
+
+
+def _is_history_overview_question(question):
+    if not question:
+        return False
+    q = question.lower()
+    overview_terms = [
+        'history', 'historique', 'all workover', 'tous les workover',
+        'all interventions', 'toutes les interventions', 'list the',
+        'liste des', 'every workover', 'chaque workover', 'overview',
+        'all the', 'complete history', 'summary of all',
+        'résumé', 'resume', 'what work', 'travaux',
+        'bilan des', 'all operations', 'toutes les opérations',
+        'what was done', 'ce qui a été fait',
+    ]
+    return any(t in q for t in overview_terms)
+
+
+def _is_failed_answer(answer_text):
+    """
+    FIX: detect answers that are errors or empty so they are never
+    injected back into the prompt as prior context — doing so confuses
+    the LLM and causes placeholder / template output.
+    """
+    if not answer_text:
+        return True
+    markers = [
+        'Technical error:', 'name \'', 'is not defined',
+        'Traceback', 'Exception', 'Not specified',
+        'do not contain specific information',
+        'Unfortunately', 'NameError', 'AttributeError',
+    ]
+    return any(m in answer_text for m in markers)
+
+
+def _other_year_dominates(chunk, target_year):
+    """
+    True only if another year clearly dominates — with noise floor.
+    FIX: requires dominating year to appear 3+ times AND by a margin > 1
+    over target_year count. Single header mentions no longer discard chunks.
+    Counter is now imported at module level.
+    """
+    years = re.findall(r'\b(?:19|20)\d{2}\b', chunk.page_content)
+    if not years:
+        return False
+    target_count = years.count(str(target_year))
+    most_common_year, most_common_count = Counter(years).most_common(1)[0]
+    return (
+        most_common_year != str(target_year)
+        and most_common_count > target_count + 1   # clear margin
+        and most_common_count >= 3                  # ignore noise
+    )
+
+
+def _extract_event_blocks(chunks):
+    """
+    Locate workover title chunks ('WORKOVER - YYYY / Sequences of Events')
+    and split all chunks into per-year blocks. Returns list of
+    (year_str, [chunks]) sorted by chunk_index. Generic — works on any
+    indexed document.
+    """
+    title_re = re.compile(
+        r'WORKOVER\s*[-–—]?\s*((?:19|20)\d{2})\s*/?\s*'
+        r'Sequences\s+of\s+Events',
+        re.IGNORECASE
+    )
+    by_idx = sorted(chunks, key=lambda d: int(d.metadata.get('chunk_index', 0)))
+    blocks = []
+    current_year = None
+    current_chunks = []
+    for d in by_idx:
+        m = title_re.search(d.page_content)
+        if m:
+            if current_year and current_chunks:
+                blocks.append((current_year, current_chunks))
+            current_year = m.group(1)
+            current_chunks = [d]
+        else:
+            if current_year:
+                current_chunks.append(d)
+    if current_year and current_chunks:
+        blocks.append((current_year, current_chunks))
+    return blocks
+
+
+def _select_event_block(chunks, target_year):
+    """
+    Return the chunks belonging to the workover block for target_year,
+    sorted by chunk_index. Returns None when no title matches (caller
+    falls back to existing logic).
+
+    FIX: regex now makes 'Sequences of Events' optional so a chunk
+    containing only 'WORKOVER - 2015' also anchors the block.
+    """
+    title_re = re.compile(
+        r'WORKOVER\s*[-–—]?\s*((?:19|20)\d{2})'
+        r'(?:\s*/?\s*Sequences?\s+of\s+Events?)?',
+        re.IGNORECASE
+    )
+
+    anchor_filename = None
+    for d in sorted(chunks, key=lambda d: int(d.metadata.get('chunk_index', 0))):
+        m = title_re.search(d.page_content)
+        if m and str(m.group(1)) == str(target_year):
+            anchor_filename = d.metadata.get('filename')
+            break
+
+    blocks = _extract_event_blocks(chunks)
+    if not blocks:
+        return None
+
+    for year, block_chunks in blocks:
+        if str(year) == str(target_year):
+            if anchor_filename:
+                block_chunks = [c for c in block_chunks
+                                if c.metadata.get('filename') == anchor_filename]
+            return sorted(block_chunks,
+                          key=lambda d: int(d.metadata.get('chunk_index', 0)))
+    return None
+
+
+def _find_densest_year_window(chunks, target_year, window=None):
+    """
+    Find the contiguous block of chunks (by chunk_index) most dense in
+    target_year mentions, then filter chunks where another year dominates.
+
+    FIX 1: window is now dynamic — sized from the number of chunks that
+            actually mention target_year (min 12, max 35). This handles
+            long workovers like the 2013 EZZ9 WO that spans 26 days.
+    FIX 2: cross-year workovers — chunks from year+1 that are adjacent
+            to the block are kept (handles Dec 2013 → Jan 2014 WO).
+    FIX 3: Counter imported at module level — no more NameError.
+    """
+    if not chunks or not target_year:
+        return chunks
+
+    by_idx = sorted(chunks, key=lambda d: int(d.metadata.get('chunk_index', 0)))
+    n = len(by_idx)
+
+    # Dynamic window: count year hits, add buffer for conclusion chunks
+    if window is None:
+        year_hit_count = sum(1 for d in by_idx if str(target_year) in d.page_content)
+        window = max(12, min(year_hit_count + 6, 35))
+
+    if n <= window:
+        return [d for d in by_idx if not _other_year_dominates(d, target_year)]
+
+    # Sliding window to find densest region
+    best_start, best_score = 0, -1
+    for start in range(n - window + 1):
+        win = by_idx[start:start + window]
+        score = sum(1 for d in win if str(target_year) in d.page_content)
+        if score > best_score:
+            best_score, best_start = score, start
+
+    block = by_idx[best_start:best_start + window]
+
+    # Keep year+1 chunks — they are likely the conclusion of a cross-year WO
+    next_year = str(int(target_year) + 1)
+
+    def should_keep(chunk):
+        content = chunk.page_content
+        if str(target_year) in content:
+            return True
+        # Keep year+1 chunks only if no other contaminating year is present
+        if next_year in content and str(target_year) not in content:
+            years_in_chunk = re.findall(r'\b(?:19|20)\d{2}\b', content)
+            counts = Counter(years_in_chunk)
+            other_years = set(counts.keys()) - {next_year}
+            if not other_years:
+                return True
+        return not _other_year_dominates(chunk, target_year)
+
+    return [d for d in block if should_keep(d)]
 
 
 def _localized_trend_word(direction, lang):
@@ -1353,7 +1477,6 @@ def _build_structured_well_year_trend_answer(question, lang, today_str):
     total_oil = sum(float(r.get('total_oil', 0) or 0) for r in rows)
     import calendar as _cal
     total_days = sum(_cal.monthrange(int(r.get('year', year)), int(r.get('month', 1)))[1] for r in rows)
-    months_with_data = len([r for r in rows if float(r.get('total_oil', 0) or 0) > 0])
     avg_bopd = (total_oil / total_days) if total_days > 0 else 0.0
 
     first_oil = float(rows[0].get('total_oil', 0) or 0)
@@ -1659,7 +1782,6 @@ def generate_suggestions(question, well=None, lang='fr'):
 
 
 def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, use_docs=True):
-    """Detect question type and return the appropriate prompt key."""
     if not use_sql or doc_id or doc_ids:
         return 'document_qa'
 
@@ -1683,7 +1805,9 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
     if has_well and any(w in q for w in [
         'analyse', 'analysis', 'analyser', 'tell me about',
         'give me', 'overview', 'deep dive', 'about ezz',
-        'from both', 'combine'
+        'from both', 'combine', 'summary', 'situation',
+        'état', 'etat', 'performance', 'status', 'bilan',
+        'detail', 'historique', 'history',
     ]):
         return 'well_analysis'
 
@@ -1713,11 +1837,6 @@ def _detect_task(question, doc_id, doc_ids, needs_comments, well, use_sql=True, 
 
 
 def _build_well_confusion_rule(well_ref):
-    """
-    Build a dynamic well confusion guard for PROMPT_DOCUMENT_QA.
-    Prevents the LLM from mixing up EZZ1/EZZ11 or any adjacent well numbers.
-    Returns an empty string when no guard is needed.
-    """
     if not well_ref:
         return ""
     wnum = re.search(r'\d+', well_ref.well_code)
@@ -1863,7 +1982,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
         )
 
         if is_doc_priority:
-    # If question has a specific year, fetch more chunks to find year-specific content
             import re as _re_year
             year_in_q = _re_year.search(r'\b(20\d{2})\b', q_lower)
             retrieval_k = 30 if year_in_q else 20
@@ -1919,7 +2037,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                     LCDoc(page_content=doc, metadata=meta)
                     for doc, meta in zip(all_dgh['documents'], all_dgh['metadatas'])
                 ]
-                # FIX 7: dedup on full-content hash.
                 forced_keys = {_chunk_key(d.page_content) for d in forced}
                 doc_results = forced + [
                     r for r in doc_results
@@ -1951,7 +2068,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             col = vs._collection
             from langchain.schema import Document as LCDoc
             year_boosted = []
-            # FIX 7: dedup on full-content hash.
             existing_keys = {_chunk_key(r.page_content) for r in doc_results}
             all_meta = col.get(include=['metadatas', 'documents'])
             for doc, meta in zip(all_meta['documents'], all_meta['metadatas']):
@@ -1971,9 +2087,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             logger.info(f"  Chunk {i+1}: [{r.metadata.get('filename','?')}] {r.page_content[:150]}")
 
         if doc_id and doc_results:
-            # FIX 12: validate on a wider sample (up to 10 chunks) instead of
-            #         just the first 3. A valid PDF whose first chunks are a
-            #         cover page / table of contents was being fully rejected.
             sample = " ".join(d.page_content for d in doc_results[:10])
             if not is_petroleum_document(sample):
                 return {
@@ -1987,6 +2100,15 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             import re as _re2
             year_in_q = _re2.search(r'\b(20\d{2}|19\d{2})\b', question)
             target_year = year_in_q.group(1) if year_in_q else None
+
+            # FIX: only inject tail chunks for CURRENT STATUS questions,
+            # not for historical year-specific queries (wastes budget)
+            _inject_tail_first = _is_current_status_question(question)
+            _is_historical_year_query = bool(target_year) and not _inject_tail_first
+            logger.info(
+                f"Tail-chunk mode: "
+                f"{'FRONT (status)' if _inject_tail_first else 'BACK (historical)' if _is_historical_year_query else 'BACK (general)'}"
+            )
 
             PRIORITY_TERMS = [
                 'rejected', 'lost thickness', 'sucker rod', 'wash out',
@@ -2070,53 +2192,50 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
                     sorted_results = high_value_ordered + low_value_ordered[:5]
 
-                    # FIX 13: force-inject last 2 chunks, but dedup by full-content
-                    #         hash so they do not silently push relevant chunks
-                    #         out of the budget. The hard cap below keeps the list
-                    #         bounded.
-                    try:
-                        from langchain.schema import Document as LCDoc
-                        _vs = get_global_vectorstore()
-                        _col = _vs._collection
-                        _all_file = _col.get(
-                            where={'filename': expected_file},
-                            include=['documents', 'metadatas']
-                        )
-                        if _all_file and _all_file.get('documents'):
-                            _all_chunks = sorted(
-                                [LCDoc(page_content=doc, metadata=meta)
-                                 for doc, meta in zip(_all_file['documents'], _all_file['metadatas'])],
-                                key=lambda d: int(d.metadata.get('chunk_index', 0))
+                    # FIX: skip tail injection for historical year queries —
+                    # tail chunks (completion schematic, last page) are
+                    # irrelevant for e.g. "what happened in 2013 workover"
+                    # and waste ~3600 chars of the 18000-char context budget.
+                    if not _is_historical_year_query:
+                        try:
+                            from langchain.schema import Document as LCDoc
+                            _vs = get_global_vectorstore()
+                            _col = _vs._collection
+                            _all_file = _col.get(
+                                where={'filename': expected_file},
+                                include=['documents', 'metadatas']
                             )
-                            logger.info(f"ChromaDB direct: {len(_all_chunks)} total chunks in {expected_file}")
-                            # FIX 14: inject tail chunks at position 0 ONLY for
-                            #          current-status questions. For historical/
-                            #          workover questions, append to end so the
-                            #          objective chunk (earlier chunk_index) is
-                            #          read before the result by the LLM.
-                            _inject_tail_first = _is_current_status_question(question)
-                            logger.info(
-                                f"Tail-chunk injection mode: "
-                                f"{'FRONT (status question)' if _inject_tail_first else 'BACK (historical question)'}"
-                            )
-                            for _tail_chunk in reversed(_all_chunks[-2:]):
-                                _tail_key = _chunk_key(_tail_chunk.page_content)
-                                sorted_results = [
-                                    d for d in sorted_results
-                                    if _chunk_key(d.page_content) != _tail_key
-                                ]
-                                if _inject_tail_first:
-                                    sorted_results = [_tail_chunk] + sorted_results
-                                else:
-                                    sorted_results = sorted_results + [_tail_chunk]
-                                logger.info(
-                                    f"Force-injected chunk index "
-                                    f"{_tail_chunk.metadata.get('chunk_index')} "
-                                    f"at position {'0 (front)' if _inject_tail_first else 'end (back)'}"
-                                    f" from {expected_file}"
+                            if _all_file and _all_file.get('documents'):
+                                _all_chunks = sorted(
+                                    [LCDoc(page_content=doc, metadata=meta)
+                                     for doc, meta in zip(_all_file['documents'], _all_file['metadatas'])],
+                                    key=lambda d: int(d.metadata.get('chunk_index', 0))
                                 )
-                    except Exception as _e:
-                        logger.warning(f"Force-inject failed: {_e}")
+                                logger.info(f"ChromaDB direct: {len(_all_chunks)} total chunks in {expected_file}")
+                                for _tail_chunk in reversed(_all_chunks[-2:]):
+                                    _tail_key = _chunk_key(_tail_chunk.page_content)
+                                    sorted_results = [
+                                        d for d in sorted_results
+                                        if _chunk_key(d.page_content) != _tail_key
+                                    ]
+                                    if _inject_tail_first:
+                                        sorted_results = [_tail_chunk] + sorted_results
+                                    else:
+                                        sorted_results = sorted_results + [_tail_chunk]
+                                    logger.info(
+                                        f"Force-injected chunk index "
+                                        f"{_tail_chunk.metadata.get('chunk_index')} "
+                                        f"at position {'0 (front)' if _inject_tail_first else 'end (back)'}"
+                                        f" from {expected_file}"
+                                    )
+                        except Exception as _e:
+                            logger.warning(f"Force-inject failed: {_e}")
+                    else:
+                        logger.info(
+                            f"Tail injection SKIPPED — historical year query "
+                            f"(year={target_year}), preserving context budget"
+                        )
+
                     logger.info(
                         f"Single-well filter: {len(high_value)} high-value, "
                         f"{len(low_value)} low-value chunks for {expected_file}"
@@ -2126,9 +2245,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             else:
                 sorted_results = sorted(doc_results, key=doc_chunk_score, reverse=True)
 
-            # FIX 10: hard cap on the NUMBER of chunks after relevance sorting.
-            #         This makes the char-based truncation a rare safety net
-            #         rather than the primary (blind) cut.
+            # Hard cap on number of chunks
             chunk_cap = MAX_DOC_CHUNKS_FIELD if is_field_wide_doc else MAX_DOC_CHUNKS_NORMAL
             if len(sorted_results) > chunk_cap:
                 logger.info(
@@ -2136,28 +2253,80 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 )
                 sorted_results = sorted_results[:chunk_cap]
 
-            # FIX 15: for historical/year-specific questions, bring chunks that
-            #          mention the target year to the front in chunk_index order
-            #          so the LLM reads OBJECTIVE → EXECUTION → RESULT (not reversed).
-            #          Skip when it is a current-status question — tail chunks are
-            #          already at position 0 and must stay there.
-            if target_year and not _is_current_status_question(question):
-                _year_chunks = [d for d in sorted_results if target_year in d.page_content]
-                _rest_chunks = [d for d in sorted_results if target_year not in d.page_content]
-                if _year_chunks:
-                    _year_chunks = sorted(
-                        _year_chunks,
+            # Dense year window for year-specific single-well queries
+            if detected_well_num and not is_field_wide_doc and not _inject_tail_first:
+                _expected_file_15 = f"DGH_EZZ{detected_well_num}.pdf"
+                _well_sr = [d for d in sorted_results
+                            if d.metadata.get('filename') == _expected_file_15]
+                _non_well_sr = [d for d in sorted_results
+                                if d.metadata.get('filename') != _expected_file_15]
+
+                _q_year_m = _re2.search(r'\b(20\d{2}|19\d{2})\b', question)
+                if _q_year_m:
+                    _target_yr_15 = _q_year_m.group(1)
+                    _window_15 = _find_densest_year_window(_well_sr, _target_yr_15)
+                    if _window_15:
+                        _seen_15 = {_chunk_key(d.page_content) for d in _window_15}
+                        _rest_15 = [d for d in sorted_results
+                                    if _chunk_key(d.page_content) not in _seen_15]
+                        sorted_results = _window_15 + _rest_15
+                        logger.info(
+                            f"Dense window year={_target_yr_15}: {len(_window_15)} "
+                            f"consecutive chunks at front (strict year filter applied)"
+                        )
+                elif _is_history_overview_question(question):
+                    _sorted_well = sorted(
+                        _well_sr,
                         key=lambda d: int(d.metadata.get('chunk_index', 0))
                     )
-                    sorted_results = _year_chunks + _rest_chunks
+                    sorted_results = _sorted_well + _non_well_sr
+                    logger.info("History overview — full chunk_index ordering")
+                else:
+                    _all_yrs = []
+                    for _d in _well_sr:
+                        _all_yrs += _re2.findall(r'\b(?:19|20)\d{2}\b', _d.page_content)
+                    if _all_yrs:
+                        _fallback_yr = Counter(_all_yrs).most_common(1)[0][0]
+                        _window_fb = _find_densest_year_window(_well_sr, _fallback_yr)
+                        if _window_fb:
+                            _seen_fb = {_chunk_key(d.page_content) for d in _window_fb}
+                            _rest_fb = [d for d in sorted_results
+                                        if _chunk_key(d.page_content) not in _seen_fb]
+                            sorted_results = _window_fb + _rest_fb
+                            logger.info(
+                                f"Dense window fallback year={_fallback_yr}: "
+                                f"{len(_window_fb)} consecutive chunks at front"
+                            )
+
+            # FIX 19: block anchoring on workover title
+            _fix19_year_m = _re2.search(r'\b(20\d{2}|19\d{2})\b', question)
+            _fix19_target = _fix19_year_m.group(1) if _fix19_year_m else None
+            if (
+                _fix19_target
+                and not _inject_tail_first
+                and not is_field_wide_doc
+            ):
+                _fix19_block = _select_event_block(sorted_results, _fix19_target)
+                if _fix19_block:
+                    # FIX: sort the block chronologically so LLM sees events in order
+                    _fix19_block = sorted(
+                        _fix19_block,
+                        key=lambda d: int(d.metadata.get('chunk_index', 0))
+                    )
+                    _seen_19 = {_chunk_key(d.page_content) for d in _fix19_block}
+                    _rest_19 = [d for d in sorted_results
+                                if _chunk_key(d.page_content) not in _seen_19]
+                    sorted_results = _fix19_block + _rest_19
                     logger.info(
-                        f"Year-{target_year} ordering: {len(_year_chunks)} "
-                        f"chunks moved to front in chunk_index order"
+                        f"FIX19 event-block for year {_fix19_target}: "
+                        f"{len(_fix19_block)} chunks (title-anchored, chronological)"
+                    )
+                else:
+                    logger.info(
+                        f"FIX19 no workover title for {_fix19_target} "
+                        f"— fallback to existing logic"
                     )
 
-            # FIX 1: each chunk is now kept up to CHUNK_CONTENT_CHARS (1800)
-            #        instead of 600. We index up to 2000-char chunks, so 600
-            #        discarded ~70% of every chunk's content.
             for d in sorted_results:
                 src = d.metadata.get('filename', 'Document')
                 import re as _re3
@@ -2205,6 +2374,7 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
         comments_rows = []
         comments_context = ""
+        search_words = []
         if needs_comments:
             well_ref_c = normalize_well_code(question)
             well_code_str = well_ref_c.well_code if well_ref_c else None
@@ -2367,7 +2537,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
 
                     filtered_scored = sorted(filtered, key=score_chunk, reverse=True)
 
-                    # FIX 5: 4 chunks of 1200 chars per well (was 3 chunks × 600).
                     top_chunks = (filtered_scored[:FIELD_WIDE_CHUNKS_PER_WELL]
                                   if filtered_scored else results[:2])
 
@@ -2400,15 +2569,29 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
             doc_context = ""
             logger.info("SQL data authoritative — documents excluded")
 
+        # FIX: suppress failed/error answers from being injected as prior context.
+        # A prior traceback or "Not specified" answer confuses the LLM and causes
+        # it to output template placeholders instead of real data.
         history_text = ""
         if history and len(history) > 0:
             last = history[-1]
             last_q = last.get('question', '').lower()
             current_q = question.lower()
+            last_answer = last.get('answer', '')
+
+            # Only inject if the wells match AND the prior answer is not a failure
             well_in_last = re.search(r'ezz\s*#?\s*(\d+)', last_q)
             well_in_current = re.search(r'ezz\s*#?\s*(\d+)', current_q)
-            if well_in_last and well_in_current and well_in_last.group(1) == well_in_current.group(1):
-                history_text = f"\n=== PREVIOUS EXCHANGE ===\nQ: {last['question']}\nA: {last['answer'][:200]}...\n"
+            if (
+                well_in_last and well_in_current
+                and well_in_last.group(1) == well_in_current.group(1)
+                and not _is_failed_answer(last_answer)
+            ):
+                history_text = (
+                    f"\n=== PREVIOUS EXCHANGE ===\n"
+                    f"Q: {last['question']}\n"
+                    f"A: {last_answer[:200]}...\n"
+                )
 
         from .memory import get_user_memory, update_user_memory
         memory_context = get_user_memory(user) if user else ""
@@ -2446,10 +2629,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 "Ne jamais basculer vers l'anglais ou l'arabe."
             )
 
-        # FIX 3: doc context budget kept below num_ctx (16384 tokens). The
-        #        previous 28000/32000 chars, added to the system prompt + SQL +
-        #        comments, could overflow the context window and make Ollama
-        #        silently truncate the START of the prompt (system rules).
         MAX_DOC_CONTEXT_CHARS = (
             MAX_DOC_CONTEXT_CHARS_FIELD if is_field_wide_doc
             else MAX_DOC_CONTEXT_CHARS_NORMAL
@@ -2463,8 +2642,6 @@ def ask(question, history=None, doc_id=None, doc_ids=None, filename=None, user=N
                 f"dropped — answer may be partial."
             )
 
-        # FIX 8: SQL context budget raised to 6000 chars. The previous 1000-char
-        #        cut left the LLM with ~6 of 20 wells in a ranking.
         sql_context_len_before = len(sql_context)
         if len(sql_context) > MAX_SQL_CONTEXT_CHARS:
             sql_context = sql_context[:MAX_SQL_CONTEXT_CHARS] + "\n[... sql context truncated ...]"
@@ -2543,9 +2720,6 @@ ANSWER:"""
             answer = response.strip()
         except Exception as llm_error:
             logger.error(f"LLM invoke error: {llm_error}")
-            # FIX 4: the degraded retry now keeps far more context (12000 vs
-            #        8000 chars) AND logs a VISIBLE warning so a silently
-            #        partial answer is no longer invisible in the logs.
             if 'context' in str(llm_error).lower() or len(prompt) > 45000:
                 logger.warning(
                     "Prompt too large — retrying with REDUCED context. "
@@ -2565,9 +2739,6 @@ ANSWER:"""
         answer = _sanitize_answer_language(answer, lang)
         logger.info(f"Response generated: {len(answer)} chars")
 
-        # FIX 2 (detection): if the answer ends without sentence-ending
-        #        punctuation and is suspiciously short relative to the context,
-        #        log it so truncated generations are visible.
         if answer and len(answer) > 50:
             last_char = answer.rstrip()[-1]
             if last_char not in '.!?:|)】»"\'`' and not answer.rstrip().endswith('---'):

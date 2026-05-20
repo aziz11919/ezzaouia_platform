@@ -680,9 +680,13 @@ export default function Chatbot() {
   async function confirmDelete(id) {
     try {
       await chatbotAPI.deleteSession(id)
-      setSessions(prev => prev.filter(s => s.id !== id))
       setDeleteModal(null)
-      if (activeSession?.id === id) navigate('/chatbot', { replace: true })
+      if (activeSession?.id === id) {
+        navigate('/chatbot', { replace: true })
+      } else {
+        const r = await chatbotAPI.getSessions()
+        setSessions(r.data?.sessions || [])
+      }
     } catch { alert('Delete failed.') }
   }
 

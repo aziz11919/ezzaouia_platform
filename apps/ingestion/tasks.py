@@ -2,11 +2,30 @@
 Tâches Celery asynchrones — traitement des fichiers uploadés.
 """
 import logging
+import os
+import re
 from celery import shared_task
 from .models import UploadedFile
 from .parsers import parse_excel, parse_pdf, parse_word
 
 logger = logging.getLogger('apps')
+
+_STATUS_TABLE_ROW = re.compile(
+    r'EZZ\s*\d{1,2}\s+\d{3,4}\s+'
+    r'(PRODUCER|CLOSED|PLUGGED AND ABANDONED|DISPOSAL WELL)'
+    r'[^\n]*',
+    re.IGNORECASE,
+)
+
+
+def _remove_status_table_rows(text: str) -> str:
+    """Strip the global well status summary table rows from extracted PDF text.
+
+    Those rows (e.g. "EZZ 8 ST  2250  CLOSED  ---") are retrieved as top
+    semantic hits for almost every well query because they contain all well
+    names, poisoning the context with wrong status labels.
+    """
+    return _STATUS_TABLE_ROW.sub('', text)
 
 
 @shared_task(bind=True, max_retries=3)
@@ -42,6 +61,25 @@ def process_uploaded_file(self, file_id):
                 raise Exception(error)
             uploaded.rows_extracted = len(text.split('\n'))
             logger.info(f"Word traité : {uploaded.rows_extracted} lignes")
+
+        # ── Strip global well-status table rows before validation/indexing ──
+        if file_type in ['pdf', 'docx'] and text:
+            text = _remove_status_table_rows(text)
+
+        # ── Petroleum document validation ────────────────────────
+        if file_type in ['pdf', 'docx'] and text:
+            from apps.chatbot.rag_pipeline import is_petroleum_document
+            if not is_petroleum_document(text):
+                uploaded.status = UploadedFile.Status.REJECTED
+                uploaded.error_msg = 'Document not related to petroleum/MARETAP'
+                uploaded.save()
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except Exception as e:
+                    logger.warning(f"Impossible de supprimer {filepath} : {e}")
+                logger.info(f"Fichier {file_id} rejeté : non pétrolier")
+                return f"Fichier {file_id} rejeté : non pétrolier"
 
         # ── Indexation RAG pour PDF et Word ──────────────────────
         # Indexation RAG avec doc_id pour isolation

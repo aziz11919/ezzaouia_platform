@@ -1,132 +1,202 @@
+"""
+Modèles Django mappés sur le Data Warehouse SQL Server EZZAOUIA.
+Tous managed=False : Django ne touche jamais au schéma SQL Server.
+"""
 from django.db import models
 
+
 class DimDate(models.Model):
-    datekey   = models.IntegerField(db_column='DateKey', primary_key=True)
-    fulldate  = models.DateField(db_column='FullDate')
-    day       = models.SmallIntegerField(db_column='Day')
-    month     = models.SmallIntegerField(db_column='Month')
-    year      = models.SmallIntegerField(db_column='Year')
-    quarter   = models.SmallIntegerField(db_column='Quarter')
-    monthname = models.CharField(db_column='MonthName', max_length=20)
+    date_key   = models.IntegerField(primary_key=True, db_column='DateKey')
+    full_date  = models.DateField(db_column='FullDate')
+    day        = models.SmallIntegerField(db_column='Day')
+    month      = models.SmallIntegerField(db_column='Month')
+    year       = models.SmallIntegerField(db_column='Year')
+    quarter    = models.SmallIntegerField(db_column='Quarter')
+    month_name = models.CharField(max_length=20, db_column='MonthName')
+
     class Meta:
         managed = False
         db_table = 'DimDate'
+
     def __str__(self):
-        return str(self.fulldate)
+        return str(self.full_date)
+
 
 class DimPowerType(models.Model):
-    powertypekey  = models.AutoField(db_column='PowerTypeKey', primary_key=True)
-    powertypecode = models.IntegerField(db_column='PowerTypeCode')
-    powertypename = models.CharField(db_column='PowerTypeName', max_length=50)
+    power_type_key  = models.IntegerField(primary_key=True, db_column='PowerTypeKey')
+    power_type_code = models.IntegerField(db_column='PowerTypeCode')
+    power_type_name = models.CharField(max_length=50, db_column='PowerTypeName')
+
     class Meta:
         managed = False
         db_table = 'DimPowerType'
+
     def __str__(self):
-        return self.powertypename
+        return self.power_type_name
+
 
 class DimProdMethod(models.Model):
-    prodmethodkey  = models.AutoField(db_column='ProdMethodKey', primary_key=True)
-    prodmethodcode = models.IntegerField(db_column='ProdMethodCode')
-    prodmethodname = models.CharField(db_column='ProdMethodName', max_length=50)
+    prod_method_key  = models.IntegerField(primary_key=True, db_column='ProdMethodKey')
+    prod_method_code = models.IntegerField(db_column='ProdMethodCode')
+    prod_method_name = models.CharField(max_length=50, db_column='ProdMethodName')
+
     class Meta:
         managed = False
         db_table = 'DimProdMethod'
+
     def __str__(self):
-        return self.prodmethodname
+        return self.prod_method_name
+
 
 class DimTypeWell(models.Model):
-    typewellkey  = models.AutoField(db_column='TypeWellKey', primary_key=True)
-    typewellcode = models.IntegerField(db_column='TypeWellCode')
-    typewellname = models.CharField(db_column='TypeWellName', max_length=50)
+    type_well_key  = models.IntegerField(primary_key=True, db_column='TypeWellKey')
+    type_well_code = models.IntegerField(db_column='TypeWellCode')
+    type_well_name = models.CharField(max_length=50, db_column='TypeWellName')
+
     class Meta:
         managed = False
         db_table = 'DimTypeWell'
+
     def __str__(self):
-        return self.typewellname
+        return self.type_well_name
+
 
 class DimTank(models.Model):
-    tankkey  = models.AutoField(db_column='TankKey', primary_key=True)
-    tankcode = models.CharField(db_column='TankCode', max_length=20)
-    tankname = models.CharField(db_column='TankName', max_length=50)
+    tank_key  = models.IntegerField(primary_key=True, db_column='TankKey')
+    tank_code = models.CharField(max_length=20, db_column='TankCode')
+    tank_name = models.CharField(max_length=50, db_column='TankName')
+
     class Meta:
         managed = False
         db_table = 'DimTank'
+
     def __str__(self):
-        return self.tankname
+        return f'{self.tank_code} — {self.tank_name}'
+
 
 class DimWell(models.Model):
-    wellkey      = models.AutoField(db_column='WellKey', primary_key=True)
-    wellcode     = models.CharField(db_column='WellCode', max_length=5)
-    libelle      = models.CharField(db_column='Libelle', max_length=100)
-    layer        = models.CharField(db_column='Layer', max_length=50)
-    closed       = models.CharField(db_column='Closed', max_length=1, blank=True, null=True)
-    maxprod      = models.IntegerField(db_column='MaxProd', blank=True, null=True)
-    affichable   = models.CharField(db_column='Affichable', max_length=1, blank=True, null=True)
-    ordre        = models.IntegerField(db_column='Ordre', blank=True, null=True)
-    powertypekey  = models.ForeignKey(DimPowerType,  on_delete=models.DO_NOTHING, db_column='PowerTypeKey',  blank=True, null=True, related_name='wells')
-    prodmethodkey = models.ForeignKey(DimProdMethod, on_delete=models.DO_NOTHING, db_column='ProdMethodKey', blank=True, null=True, related_name='wells')
-    typewellkey   = models.ForeignKey(DimTypeWell,   on_delete=models.DO_NOTHING, db_column='TypeWellKey',   blank=True, null=True, related_name='wells')
+    well_key    = models.IntegerField(primary_key=True, db_column='WellKey')
+    well_code   = models.CharField(max_length=5, db_column='WellCode')
+    libelle     = models.CharField(max_length=100, db_column='Libelle')
+    layer       = models.CharField(max_length=50, db_column='Layer')
+    closed      = models.CharField(max_length=1, null=True, blank=True, db_column='Closed')
+    max_prod    = models.IntegerField(null=True, blank=True, db_column='MaxProd')
+    affichable  = models.CharField(max_length=1, null=True, blank=True, db_column='Affichable')
+    ordre       = models.IntegerField(null=True, blank=True, db_column='Ordre')
+    power_type  = models.ForeignKey(
+        'DimPowerType', null=True, blank=True,
+        on_delete=models.DO_NOTHING, db_column='PowerTypeKey',
+        related_name='wells',
+    )
+    prod_method = models.ForeignKey(
+        'DimProdMethod', null=True, blank=True,
+        on_delete=models.DO_NOTHING, db_column='ProdMethodKey',
+        related_name='wells',
+    )
+    type_well   = models.ForeignKey(
+        'DimTypeWell', null=True, blank=True,
+        on_delete=models.DO_NOTHING, db_column='TypeWellKey',
+        related_name='wells',
+    )
+
     class Meta:
         managed = False
         db_table = 'DimWell'
-        ordering = ['ordre', 'wellcode']
+        ordering = ['ordre', 'well_code']
+
     def __str__(self):
-        return f'{self.wellcode} — {self.libelle}'
+        return f'{self.well_code} — {self.libelle}'
+
     @property
     def is_active(self):
         return self.closed != 'Y'
 
-class FactDailyProduction(models.Model):
-    factprodkey         = models.AutoField(db_column='FactProdKey', primary_key=True)
-    wellkey             = models.ForeignKey(DimWell, on_delete=models.DO_NOTHING, db_column='WellKey', related_name='daily_productions')
-    datekey             = models.ForeignKey(DimDate, on_delete=models.DO_NOTHING, db_column='DateKey', related_name='daily_productions')
-    dailyoilprodstbd    = models.IntegerField(db_column='DailyOilProdSTBD')
-    dailywaterprodblsd  = models.IntegerField(db_column='DailyWaterProdBLSD', blank=True, null=True)
-    dailygasprodmscf    = models.IntegerField(db_column='DailyGasProdMSCF', blank=True, null=True)
-    prodhours           = models.DecimalField(db_column='ProdHours', max_digits=18, decimal_places=3, blank=True, null=True)
-    flowtempdegf        = models.IntegerField(db_column='FlowTempDegF', blank=True, null=True)
-    bsw                 = models.DecimalField(db_column='BSW', max_digits=18, decimal_places=3, blank=True, null=True)
-    wellstatuswaterbwpd = models.DecimalField(db_column='WellStatusWaterBWPD', max_digits=18, decimal_places=3, blank=True, null=True)
-    gorscfstb           = models.IntegerField(db_column='GORSCFSTB', blank=True, null=True)
-    cumoilstbcorrected  = models.IntegerField(db_column='CumOilStbCorrected', blank=True, null=True)
-    cumwaterbbls        = models.IntegerField(db_column='CumWaterBBLS', blank=True, null=True)
-    cumgasmscf          = models.IntegerField(db_column='CumGasMSCF', blank=True, null=True)
-    sales               = models.DecimalField(db_column='Sales', max_digits=18, decimal_places=3, blank=True, null=True)
-    fuel                = models.DecimalField(db_column='Fuel', max_digits=18, decimal_places=3, blank=True, null=True)
-    lifting             = models.IntegerField(db_column='Lifting', blank=True, null=True)
+
+class DimWellStatus(models.Model):
+    """
+    Données opérationnelles journalières par puits.
+    Reliée à FactProduction via well_status FK.
+    """
+    well_status_key  = models.IntegerField(primary_key=True, db_column='WellStatusKey')
+    well             = models.ForeignKey(
+        'DimWell', on_delete=models.DO_NOTHING,
+        db_column='WellKey', related_name='well_statuses',
+    )
+    date             = models.ForeignKey(
+        'DimDate', on_delete=models.DO_NOTHING,
+        db_column='DateKey', related_name='well_statuses',
+    )
+    prod_hours       = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='ProdHours')
+    bsw              = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='BSW')
+    gor              = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='GOR')
+    flow_temp        = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='FlowTempDegF')
+    choke            = models.CharField(max_length=100, null=True, blank=True, db_column='Choke16In')
+    tubing_psig      = models.CharField(max_length=100, null=True, blank=True, db_column='TubingPsig')
+    casing_psig      = models.CharField(max_length=100, null=True, blank=True, db_column='CasingPsig')
+    vess_pres        = models.CharField(max_length=100, null=True, blank=True, db_column='VessPresPsig')
+    power_fluid      = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='PowerFluidBFPD')
+    inj_pre          = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='InjPre')
+    manifold         = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='ManifoldDegF')
+    water_allocation = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='WaterAllocation')
+    remarque         = models.CharField(max_length=255, null=True, blank=True, db_column='Remarque')
+
     class Meta:
         managed = False
-        db_table = 'FactDailyProduction'
-        unique_together = (('wellkey', 'datekey'),)
-        ordering = ['-datekey']
+        db_table = 'DimWellStatus'
+
     def __str__(self):
-        return f'{self.wellkey} | {self.datekey} | {self.dailyoilprodstbd} STB/j'
+        return f'{self.well} | {self.date} — BSW:{self.bsw}% GOR:{self.gor}'
+
+
+class FactProduction(models.Model):
+    """
+    Faits : production journalière par puits.
+    Huile (STB/j) · Gaz (MSCF) · Eau (BWPD).
+    BSW / GOR / ProdHours via well_status → DimWellStatus.
+    """
+    fact_prod_key = models.IntegerField(primary_key=True, db_column='FactProdKey')
+    date          = models.ForeignKey(
+        'DimDate', on_delete=models.DO_NOTHING,
+        db_column='DateKey', related_name='productions',
+    )
+    well          = models.ForeignKey(
+        'DimWell', on_delete=models.DO_NOTHING,
+        db_column='WellKey', related_name='productions',
+    )
+    well_status   = models.ForeignKey(
+        'DimWellStatus', on_delete=models.DO_NOTHING,
+        db_column='WellStatusKey', null=True, blank=True,
+        related_name='productions',
+    )
+    daily_oil     = models.IntegerField(db_column='DailyOilPerWellSTBD')
+    daily_gas     = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='DailyGasPerWellMSCF')
+    daily_water   = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True, db_column='WellStatusWaterBWPD')
+
+    class Meta:
+        managed = False
+        db_table = 'FactProduction'
+        ordering = ['-date']
+
+    def __str__(self):
+        return f'{self.well} | {self.date} | {self.daily_oil} STB/j'
+
 
 class FactTankLevel(models.Model):
-    facttankkey = models.AutoField(db_column='FactTankKey', primary_key=True)
-    tankkey     = models.ForeignKey(DimTank, on_delete=models.DO_NOTHING, db_column='TankKey', related_name='tank_levels')
-    datekey     = models.ForeignKey(DimDate, on_delete=models.DO_NOTHING, db_column='DateKey', related_name='tank_levels')
-    volumebbls  = models.IntegerField(db_column='VolumeBBLS', blank=True, null=True)
+    fact_tank_key = models.IntegerField(primary_key=True, db_column='FactTankKey')
+    tank          = models.ForeignKey(
+        'DimTank', on_delete=models.DO_NOTHING,
+        db_column='TankKey', related_name='tank_levels',
+    )
+    date          = models.ForeignKey(
+        'DimDate', on_delete=models.DO_NOTHING,
+        db_column='DateKey', related_name='tank_levels',
+    )
+    volume_bbls   = models.IntegerField(null=True, blank=True, db_column='VolumeBBLS')
+
     class Meta:
         managed = False
         db_table = 'FactTankLevel'
-        unique_together = (('tankkey', 'datekey'),)
-    def __str__(self):
-        return f'{self.tankkey} | {self.datekey} | {self.volumebbls} BBLS'
+        unique_together = (('tank', 'date'),)
 
-class FactWellTest(models.Model):
-    facttestkey = models.AutoField(db_column='FactTestKey', primary_key=True)
-    wellkey     = models.ForeignKey(DimWell, on_delete=models.DO_NOTHING, db_column='WellKey', related_name='well_tests')
-    datekey     = models.ForeignKey(DimDate, on_delete=models.DO_NOTHING, db_column='DateKey', related_name='well_tests')
-    testhours   = models.IntegerField(db_column='TestHours')
-    oilbopd     = models.IntegerField(db_column='OilBOPD', blank=True, null=True)
-    waterbwpd   = models.DecimalField(db_column='WaterBWPD', max_digits=18, decimal_places=3)
-    gasmscfd    = models.IntegerField(db_column='GasMSCFD')
-    gor         = models.IntegerField(db_column='GOR', blank=True, null=True)
-    class Meta:
-        managed = False
-        db_table = 'FactWellTest'
-        unique_together = (('wellkey', 'datekey'),)
-        ordering = ['-datekey']
     def __str__(self):
-        return f'Test {self.wellkey} | {self.datekey}'
+        return f'{self.tank} | {self.date} | {self.volume_bbls} BBLS'

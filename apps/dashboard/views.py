@@ -1,13 +1,16 @@
+import json
+import datetime
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from apps.ingestion.models import UploadedFile
+from apps.core.views import serve_react
+
+from apps.kpis.calculators import (
+    get_field_production_summary,
+    get_monthly_trend,
+    get_top_producers,
+)
 
 
 @login_required
 def home(request):
-    recent_files = UploadedFile.objects.filter(
-        uploaded_by=request.user
-    ).order_by('-created_at')[:5]
-    return render(request, 'dashboard/home.html', {
-        'recent_files': recent_files
-    })
+    return serve_react(request)
+

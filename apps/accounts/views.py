@@ -201,49 +201,7 @@ def profile_view(request):
 
 @admin_required
 def user_list(request):
-    # Frontend is now rendered by React SPA.
-    if request.method == 'GET':
-        return serve_react(request)
-
-    _exclude = ['AnonymousUser', 'anonymous']
-    qs = User.objects.exclude(username__in=_exclude).order_by('username')
-
-    search = request.GET.get('q', '').strip()
-    if search:
-        qs = qs.filter(
-            Q(username__icontains=search)   |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)  |
-            Q(email__icontains=search)      |
-            Q(department__icontains=search)
-        )
-
-    role_filter = request.GET.get('role', '')
-    if role_filter:
-        qs = qs.filter(role=role_filter)
-
-    active_filter = request.GET.get('active', '')
-    if active_filter == '1':
-        qs = qs.filter(is_active=True)
-    elif active_filter == '0':
-        qs = qs.filter(is_active=False)
-
-    all_users = User.objects.exclude(username__in=_exclude)
-    stats = {
-        'total':      all_users.count(),
-        'actifs':     all_users.filter(is_active=True).count(),
-        'admins': all_users.filter(role=User.Role.ADMIN).count(),
-        'users':  all_users.filter(role=User.Role.USER).count(),
-    }
-
-    return render(request, 'accounts/users_list.html', {
-        'users':         qs,
-        'search':        search,
-        'role_filter':   role_filter,
-        'active_filter': active_filter,
-        'roles':         User.Role.choices,
-        'stats':         stats,
-    })
+    return serve_react(request)
 
 
 @admin_required
@@ -268,35 +226,6 @@ def user_create(request):
 @admin_required
 def user_edit(request, user_id):
     return serve_react(request)
-
-    from .forms import UserEditForm, SetPasswordForm
-    target = get_object_or_404(User, id=user_id)
-
-    form     = UserEditForm(instance=target)
-    pwd_form = SetPasswordForm()
-
-    if request.method == 'POST':
-        if 'change_password' in request.POST:
-            pwd_form = SetPasswordForm(request.POST)
-            if pwd_form.is_valid():
-                target.set_password(pwd_form.cleaned_data['password'])
-                target.save()
-                messages.success(request, "Password reset successfully.")
-                return redirect('accounts:user_edit', user_id=user_id)
-        else:
-            form = UserEditForm(request.POST, instance=target)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "User updated successfully.")
-                return redirect('accounts:user_list')
-
-    return render(request, 'accounts/user_form.html', {
-        'form':        form,
-        'pwd_form':    pwd_form,
-        'action':      'edit',
-        'title':       f"Edit — {target.get_full_name() or target.username}",
-        'target_user': target,
-    })
 
 
 @admin_required
@@ -323,74 +252,6 @@ def user_delete(request, user_id):
 def create_user(request):
     return serve_react(request)
 
-    if request.method == 'POST':
-        username   = request.POST.get('username', '').strip()
-        first_name = request.POST.get('first_name', '').strip()
-        last_name  = request.POST.get('last_name', '').strip()
-        email      = request.POST.get('email', '').strip()
-        role       = request.POST.get('role', '')
-        department = request.POST.get('department', '').strip()
-        phone      = request.POST.get('phone', '').strip()
-
-        errors = []
-        if not username:
-            errors.append("Username is required.")
-        elif User.objects.filter(username=username).exists():
-            errors.append("Username already exists.")
-        if not email:
-            errors.append("Email required to send password")
-        elif User.objects.filter(email=email).exists():
-            errors.append("Email already in use.")
-        elif not email.endswith('@maretap.tn'):
-            errors.append("Email must be a MARETAP email (@maretap.tn).")
-        if role not in [r[0] for r in User.Role.choices]:
-            errors.append("Invalid role selected.")
-
-        if errors:
-            return render(request, 'accounts/create_user.html', {
-                'errors':    errors,
-                'form_data': request.POST,
-                'roles':     User.Role.choices,
-            })
-
-        plain_password = generate_random_password()
-        user = User.objects.create_user(
-            username   = username,
-            email      = email,
-            password   = plain_password,
-            first_name = first_name,
-            last_name  = last_name,
-        )
-        user.role                 = role
-        user.department           = department
-        user.phone                = phone
-        user.must_change_password = True
-        user.save()
-
-        if send_password_email(user, plain_password):
-            messages.success(request, f"User {username} created. Password sent to {email}.")
-            return redirect('accounts:user_list')
-        else:
-            messages.warning(
-                request,
-                f"User created but email failed for {email}. Temporary password: {plain_password}",
-            )
-            return redirect('accounts:create_user')
-
-        try:
-            AuditLog.log(
-                action='CREATE_USER',
-                user=request.user,
-                request=request,
-                details={'created_user': username, 'role': role},
-            )
-        except Exception:
-            pass
-
-    return render(request, 'accounts/create_user.html', {
-        'roles': User.Role.choices,
-    })
-
 
 # ── Password change (forced + voluntary) ─────────────────────────
 
@@ -398,131 +259,17 @@ def create_user(request):
 def change_password(request):
     return serve_react(request)
 
-    is_forced = request.session.get('force_change_password', False)
-
-    if request.method == 'POST':
-        current_password = request.POST.get('current_password', '')
-        new_password     = request.POST.get('new_password', '')
-        confirm_password = request.POST.get('confirm_password', '')
-
-        errors = []
-
-        if not is_forced:
-            if not request.user.check_password(current_password):
-                errors.append("Current password is incorrect.")
-
-        if new_password != confirm_password:
-            errors.append("Passwords do not match.")
-        if len(new_password) < 8:
-            errors.append("Password must be at least 8 characters.")
-        if not any(c.isupper() for c in new_password):
-            errors.append("Password must contain at least one uppercase letter.")
-        if not any(c.isdigit() for c in new_password):
-            errors.append("Password must contain at least one number.")
-
-        if errors:
-            return render(request, 'accounts/change_password.html', {
-                'errors':    errors,
-                'is_forced': is_forced,
-            })
-
-        request.user.set_password(new_password)
-        request.user.must_change_password  = False
-        request.user.last_password_change  = timezone.now()
-        request.user.save()
-
-        send_password_changed_email(request.user)
-
-        if is_forced and 'force_change_password' in request.session:
-            del request.session['force_change_password']
-
-        update_session_auth_hash(request, request.user)
-        messages.success(request, "Password changed successfully.")
-        return redirect('dashboard:home')
-
-    return render(request, 'accounts/change_password.html', {
-        'is_forced': is_forced,
-    })
-
 
 # ── Forgot password ───────────────────────────────────────────────
 
 def forgot_password(request):
     return serve_react(request)
 
-    if request.method == 'POST':
-        email = request.POST.get('email', '').strip()
-        success_message = (
-            "If this email is registered, you will receive "
-            "a password reset link shortly."
-        )
-        try:
-            user    = User.objects.get(email=email)
-            token   = generate_reset_token()
-            expires = timezone.now() + timedelta(hours=1)
-            user.password_reset_token   = token
-            user.password_reset_expires = expires
-            user.save(update_fields=['password_reset_token', 'password_reset_expires'])
-            send_password_reset_email(user, token)
-        except User.DoesNotExist:
-            pass
-
-        return render(request, 'accounts/forgot_password.html', {
-            'success': success_message
-        })
-
-    return render(request, 'accounts/forgot_password.html')
-
 
 # ── Reset password via token ──────────────────────────────────────
 
 def reset_password(request, token):
     return serve_react(request)
-
-    try:
-        user = User.objects.get(
-            password_reset_token=token,
-            password_reset_expires__gt=timezone.now(),
-        )
-    except User.DoesNotExist:
-        return render(request, 'accounts/reset_password.html', {
-            'error': "This reset link is invalid or has expired. Please request a new one."
-        })
-
-    if request.method == 'POST':
-        new_password     = request.POST.get('new_password', '')
-        confirm_password = request.POST.get('confirm_password', '')
-
-        errors = []
-        if new_password != confirm_password:
-            errors.append("Passwords do not match.")
-        if len(new_password) < 8:
-            errors.append("Password must be at least 8 characters.")
-        if not any(c.isupper() for c in new_password):
-            errors.append("Password must contain at least one uppercase letter.")
-        if not any(c.isdigit() for c in new_password):
-            errors.append("Password must contain at least one number.")
-
-        if errors:
-            return render(request, 'accounts/reset_password.html', {
-                'errors': errors,
-                'token':  token,
-            })
-
-        user.set_password(new_password)
-        user.must_change_password   = False
-        user.password_reset_token   = None
-        user.password_reset_expires = None
-        user.last_password_change   = timezone.now()
-        user.save()
-
-        send_password_changed_email(user)
-
-        return render(request, 'accounts/reset_password.html', {
-            'success': "Your password has been reset successfully. You can now log in."
-        })
-
-    return render(request, 'accounts/reset_password.html', {'token': token})
 
 
 # ── Edit profile ──────────────────────────────────────────────────
@@ -588,39 +335,6 @@ def api_me(request):
     })
 
 
-@require_POST
-def api_login(request):
-    """POST /accounts/api-login/ — authentification JSON pour React."""
-    import json
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        data = {}
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    user = authenticate(request, username=username, password=password)
-    if user is not None:
-        login(request, user)
-        AuditLog.log(
-            action=AuditLog.Action.LOGIN,
-            user=user,
-            request=request,
-            details={'path': '/accounts/api-login/'},
-        )
-        return JsonResponse({
-            'success': True,
-            'user': {
-                'id':                  user.id,
-                'username':            user.username,
-                'first_name':          user.first_name,
-                'last_name':           user.last_name,
-                'email':               user.email,
-                'role':                user.role,
-                'must_change_password': getattr(user, 'must_change_password', False),
-            },
-        })
-    return JsonResponse({'success': False, 'error': 'Identifiants incorrects.'}, status=400)
-
 
 @login_required
 @require_POST
@@ -640,7 +354,6 @@ def api_logout(request):
 @require_POST
 def api_change_password(request):
     """POST /accounts/api-change-password/ — changement de mot de passe JSON."""
-    import json
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -685,7 +398,6 @@ def api_change_password(request):
 @require_POST
 def api_update_profile(request):
     """POST /accounts/api-profile/ — mise à jour profil JSON."""
-    import json
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -724,7 +436,7 @@ def api_update_profile(request):
 @require_GET
 def api_users(request):
     """GET /accounts/users-api/ - list users for React admin page."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     _exclude = ['AnonymousUser', 'anonymous']
@@ -780,7 +492,7 @@ def api_users(request):
 @require_POST
 def api_user_toggle(request, user_id):
     """POST /accounts/users-api/<id>/toggle/."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     target = get_object_or_404(User, id=user_id)
@@ -796,7 +508,7 @@ def api_user_toggle(request, user_id):
 @require_POST
 def api_user_delete(request, user_id):
     """POST /accounts/users-api/<id>/delete/."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     target = get_object_or_404(User, id=user_id)
@@ -902,7 +614,7 @@ def api_reset_password(request, token):
 @require_POST
 def api_create_user(request):
     """POST /accounts/api-create-user/ — JSON create user (admin only)."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     try:
@@ -979,7 +691,7 @@ def api_create_user(request):
 @require_GET
 def api_get_user(request, user_id):
     """GET /accounts/users-api/<id>/detail/ — single user data for React edit form."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     target = get_object_or_404(User, id=user_id)
@@ -1004,7 +716,7 @@ def api_get_user(request, user_id):
 @require_POST
 def api_edit_user(request, user_id):
     """POST /accounts/users-api/<id>/edit/ — JSON edit user (admin only)."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     try:
@@ -1046,7 +758,7 @@ def api_edit_user(request, user_id):
 @require_POST
 def api_admin_reset_password(request, user_id):
     """POST /accounts/users-api/<id>/reset-password/ — admin resets user's password."""
-    if not getattr(request.user, 'is_admin', False):
+    if request.user.role != 'admin':
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     try:
@@ -1063,8 +775,13 @@ def api_admin_reset_password(request, user_id):
         errors.append('Password is required.')
     elif password != confirm:
         errors.append('Passwords do not match.')
-    elif len(password) < 8:
-        errors.append('Password must be at least 8 characters.')
+    else:
+        if len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if not any(c.isupper() for c in password):
+            errors.append('Password must contain at least one uppercase letter.')
+        if not any(c.isdigit() for c in password):
+            errors.append('Password must contain at least one number.')
 
     if errors:
         return JsonResponse({'errors': errors}, status=400)

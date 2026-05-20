@@ -11,7 +11,6 @@ class MaintenanceMiddleware:
         "/api/maintenance/status/",
         "/api/auth/login/",
         "/accounts/login/",
-        "/accounts/api-login/",
         "/accounts/forgot-password/",
         "/accounts/api-forgot-password/",
         "/accounts/reset-password/",

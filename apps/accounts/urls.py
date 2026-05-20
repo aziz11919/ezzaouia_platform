@@ -26,7 +26,6 @@ urlpatterns = [
 
     # ── API JSON pour React frontend ──────────────────────────────
     path('me/',                    views.api_me,              name='api_me'),
-    path('api-login/',             views.api_login,           name='api_login'),
     path('api-logout/',            views.api_logout,          name='api_logout'),
     path('api-change-password/',   views.api_change_password, name='api_change_password'),
     path('api-profile/',           views.api_update_profile,  name='api_update_profile'),

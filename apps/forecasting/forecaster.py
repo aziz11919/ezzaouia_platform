@@ -129,7 +129,17 @@ def get_monthly_production(well_key=None, kpi='oil'):
         'prodhours': 'AVG(CAST(ws.ProdHours AS FLOAT))',
     }
 
-    agg_expr = kpi_map.get(kpi, kpi_map['oil'])
+    filter_map = {
+        'oil':       'f.DailyOilPerWellSTBD >= 0',
+        'gas':       'f.DailyGasPerWellMSCF >= 0',
+        'water':     'f.WellStatusWaterBWPD >= 0',
+        'bsw':       'ws.BSW IS NOT NULL',
+        'gor':       'ws.GOR IS NOT NULL',
+        'prodhours': 'ws.ProdHours IS NOT NULL',
+    }
+
+    agg_expr    = kpi_map.get(kpi, kpi_map['oil'])
+    kpi_filter  = filter_map.get(kpi, 'f.DailyOilPerWellSTBD >= 0')
     well_filter = f"AND f.WellKey = {int(well_key)}" if well_key else ""
 
     sql = f"""
@@ -139,7 +149,7 @@ def get_monthly_production(well_key=None, kpi='oil'):
         FROM dbo.FactProduction f
         JOIN dbo.DimDate d ON f.DateKey = d.DateKey
         LEFT JOIN dbo.DimWellStatus ws ON f.WellStatusKey = ws.WellStatusKey
-        WHERE f.DailyOilPerWellSTBD >= 0
+        WHERE {kpi_filter}
         {well_filter}
         GROUP BY d.[Year], d.[Month]
         ORDER BY d.[Year], d.[Month]

@@ -431,21 +431,30 @@ export default function Forecasting() {
     try {
       if (mode === 'all_wells') {
         const res = await forecastingAPI.getAllWells(kpi, periods)
-        setAllWellsResult(res.data)
+        if (res.data?.error) setError(res.data.error)
+        else setAllWellsResult(res.data)
+
       } else if (mode === 'well') {
-        if (!wellKey) { setError('Please select a well.'); setLoading(false); return }
+        if (!wellKey) {
+          setError('Please select a well.')
+          setLoading(false)
+          return
+        }
         const res = await forecastingAPI.getWell(wellKey, kpi, periods)
         if (res.data?.error) setError(res.data.error)
         else setResult(res.data)
+
       } else {
         const res = await forecastingAPI.getField(kpi, periods)
         if (res.data?.error) setError(res.data.error)
         else setResult(res.data)
       }
+
     } catch (err) {
       const apiError = err?.response?.data?.error || err?.response?.data?.detail
       if (apiError) setError(apiError)
       else setError('API request failed. Check that the backend is running and models are installed.')
+
     } finally {
       setLoading(false)
     }

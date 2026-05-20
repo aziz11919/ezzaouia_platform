@@ -15,6 +15,7 @@ class UploadedFile(BaseModel):
         PROCESSING = 'processing', 'Processing'
         SUCCESS = 'success', 'Completed'
         ERROR = 'error', 'Error'
+        REJECTED = 'rejected', 'Rejected'
 
     file = models.FileField(upload_to='uploads/%Y/%m/%d/')
     original_name = models.CharField(max_length=255)

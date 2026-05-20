@@ -70,7 +70,7 @@ def process_uploaded_file(self, file_id):
         if file_type in ['pdf', 'docx'] and text:
             from apps.chatbot.rag_pipeline import is_petroleum_document
             if not is_petroleum_document(text):
-                uploaded.status = 'rejected'
+                uploaded.status = UploadedFile.Status.REJECTED
                 uploaded.error_msg = 'Document not related to petroleum/MARETAP'
                 uploaded.save()
                 try:

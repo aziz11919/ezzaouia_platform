@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout/Layout'
 import { ingestionAPI } from '../api/ingestion'
 
 const ACCEPTED_EXTS = ['pdf', 'docx', 'xlsx']
+const MAX_FILE_SIZE = 50 * 1024 * 1024  // 50 MB
 
 function fileExt(name) {
   return name.split('.').pop().toLowerCase()
@@ -26,9 +27,18 @@ export default function FileImport() {
   const folderInputRef = useRef(null)
 
   function buildQueue(fileList) {
-    const valid = Array.from(fileList).filter(f => ACCEPTED_EXTS.includes(fileExt(f.name)))
-    setQueue(valid.map(f => ({ file: f, status: 'pending', msg: '' })))
-    setGlobalMsg(null)
+    const valid = []
+    const oversized = []
+    for (const f of Array.from(fileList)) {
+      if (!ACCEPTED_EXTS.includes(fileExt(f.name))) continue
+      if (f.size > MAX_FILE_SIZE) { oversized.push(f.name); continue }
+      valid.push({ file: f, status: 'pending', msg: '' })
+    }
+    setQueue(valid)
+    if (oversized.length)
+      setGlobalMsg({ type: 'error', text: `Fichier(s) trop volumineux (max 50 MB) : ${oversized.join(', ')}` })
+    else
+      setGlobalMsg(null)
   }
 
   function handleFilesChange(e) {
@@ -56,36 +66,77 @@ export default function FileImport() {
     }
   }
 
+  // Poll /api-status/<id>/ until Celery finishes (success / error / rejected)
+  const pollStatus = useCallback(async (fileId, idx) => {
+    for (let n = 0; n < 30; n++) {
+      await new Promise(r => setTimeout(r, 2000))
+      try {
+        const { data } = await ingestionAPI.getStatus(fileId)
+        if (data.status === 'success') {
+          setQueue(q => q.map((x, i) => i === idx ? { ...x, status: 'done', msg: 'Traité ✓' } : x))
+          return 'success'
+        }
+        if (data.status === 'error') {
+          setQueue(q => q.map((x, i) => i === idx ? { ...x, status: 'error', msg: data.error || 'Erreur de traitement' } : x))
+          return 'error'
+        }
+        if (data.status === 'rejected') {
+          setQueue(q => q.map((x, i) => i === idx ? { ...x, status: 'rejected', msg: data.reason || 'Non lié au pétrole/MARETAP' } : x))
+          return 'rejected'
+        }
+        // 'pending' or 'processing' — continue
+      } catch { /* network hiccup — keep polling */ }
+    }
+    setQueue(q => q.map((x, i) => i === idx ? { ...x, status: 'error', msg: 'Timeout — traitement trop long' } : x))
+    return 'timeout'
+  }, [])
+
   async function startUpload() {
     if (!queue.length || running) return
     setRunning(true)
     setGlobalMsg(null)
 
-    let done = 0, errors = 0
+    // Phase 1 — upload all pending files sequentially
+    const toProcess = []
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i]
-      if (item.status === 'done') { done++; continue }
+      if (item.status !== 'pending') continue
 
       setQueue(q => q.map((x, idx) => idx === i ? { ...x, status: 'uploading' } : x))
       try {
         const fd = new FormData()
         fd.append('file', item.file)
-        await ingestionAPI.upload(fd)
-        setQueue(q => q.map((x, idx) => idx === i ? { ...x, status: 'done', msg: 'Importé' } : x))
-        done++
+        const res = await ingestionAPI.upload(fd)
+        const fileId = res.data?.file?.id
+        if (fileId) {
+          setQueue(q => q.map((x, idx) => idx === i ? { ...x, status: 'processing', msg: 'Indexation…' } : x))
+          toProcess.push({ idx: i, fileId })
+        } else {
+          setQueue(q => q.map((x, idx) => idx === i ? { ...x, status: 'error', msg: 'Erreur : ID fichier manquant' } : x))
+        }
       } catch (err) {
         const msg = err.response?.data?.error || 'Erreur upload'
         setQueue(q => q.map((x, idx) => idx === i ? { ...x, status: 'error', msg } : x))
-        errors++
       }
     }
 
+    // Phase 2 — poll all uploaded files concurrently
+    const results = await Promise.all(
+      toProcess.map(({ idx, fileId }) => pollStatus(fileId, idx))
+    )
+
+    const success  = results.filter(s => s === 'success').length
+    const rejected = results.filter(s => s === 'rejected').length
+    const failed   = results.filter(s => s === 'error' || s === 'timeout').length
+
     setRunning(false)
-    if (errors === 0) {
-      setGlobalMsg({ type: 'success', text: `${done} fichier(s) importé(s) avec succès.` })
-    } else {
-      setGlobalMsg({ type: 'error', text: `${done} importé(s), ${errors} erreur(s).` })
-    }
+    if (failed === 0 && rejected === 0)
+      setGlobalMsg({ type: 'success', text: `${success} fichier(s) traité(s) avec succès.` })
+    else
+      setGlobalMsg({
+        type: 'error',
+        text: `${success} traité(s)${rejected ? `, ${rejected} rejeté(s) — document non lié au domaine pétrolier/MARETAP` : ''}${failed ? `, ${failed} erreur(s)` : ''}.`,
+      })
   }
 
   function clearQueue() {
@@ -98,8 +149,22 @@ export default function FileImport() {
   const pendingCount = queue.filter(x => x.status === 'pending').length
   const doneCount    = queue.filter(x => x.status === 'done').length
 
-  const statusColor = { pending: 'var(--text-dim)', uploading: 'var(--gold)', done: 'var(--green)', error: 'var(--red)' }
-  const statusLabel = { pending: '—', uploading: '...', done: '✓', error: '✗' }
+  const statusColor = {
+    pending:    'var(--text-dim)',
+    uploading:  'var(--gold)',
+    processing: 'var(--blue)',
+    done:       'var(--green)',
+    rejected:   'var(--red)',
+    error:      'var(--red)',
+  }
+  const statusLabel = {
+    pending:    '—',
+    uploading:  '…',
+    processing: '⟳',
+    done:       '✓',
+    rejected:   '⊘',
+    error:      '✗',
+  }
 
   return (
     <Layout
@@ -315,7 +380,12 @@ export default function FileImport() {
                     }}>
                       {item.file.name}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                    <div style={{
+                      fontSize: 11,
+                      color: (item.status === 'rejected' || item.status === 'error')
+                        ? statusColor[item.status]
+                        : 'var(--text-dim)',
+                    }}>
                       {formatSize(item.file.size)}
                       {item.msg ? ` · ${item.msg}` : ''}
                     </div>
@@ -327,9 +397,9 @@ export default function FileImport() {
                     color: statusColor[item.status],
                     animation: item.status === 'uploading' ? 'pulse 1s infinite' : 'none',
                   }}>
-                    {item.status === 'uploading' ? (
+                    {(item.status === 'uploading' || item.status === 'processing') ? (
                       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        style={{ animation: 'spin 1s linear infinite' }}>
+                        style={{ animation: 'spin 1s linear infinite', color: statusColor[item.status] }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                           d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                       </svg>

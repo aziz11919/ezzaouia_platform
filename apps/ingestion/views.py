@@ -95,6 +95,7 @@ def api_recent_files(request):
                 'original_name': f.original_name,
                 'file_type':     f.file_type,
                 'status':        f.status,
+                'error_msg':     f.error_msg or '',
                 'created_at':    f.created_at.strftime('%d/%m/%Y %H:%M'),
             }
             for f in files
@@ -172,7 +173,7 @@ def api_file_status(request, file_id):
     response = {
         'id':     f.id,
         'status': f.status,
-        'error':  getattr(f, 'error_message', '') or '',
+        'error':  f.error_msg or '',
     }
     if f.status == 'rejected':
         response['reason'] = getattr(f, 'error_msg', 'Document not related to petroleum/MARETAP')
